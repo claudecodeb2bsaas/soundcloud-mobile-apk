@@ -8,7 +8,7 @@
 
 <a href="https://github.com/zxczxczxczxczxczxc1111/soundcloud-desktop/releases/latest"><img src="assets/readme/download.svg" width="248" height="48" alt="Скачать для Windows"></a>
 
-<sub>Версия 0.15.0 для Windows 10 и 11 x64</sub>
+<sub>Версия 0.15.1 для Windows 10 и 11 x64</sub>
 
 <a href="#моя-волна">Моя волна</a>&emsp;<a href="#радар-релизов">Радар релизов</a>&emsp;<a href="#история">История</a>&emsp;<a href="#что-ещё-есть-в-клиенте">Что ещё есть</a>&emsp;<a href="#установка">Установка</a>
 
@@ -197,7 +197,7 @@
 
 ## Установка
 
-Бери установщик `soundcloud-desktop-0.15.0-setup-x64.exe` на странице [последнего релиза](https://github.com/zxczxczxczxczxczxc1111/soundcloud-desktop/releases/latest). Рядом лежит `SHA256SUMS`, если захочешь сверить файлы.
+Бери установщик `soundcloud-desktop-0.15.1-setup-x64.exe` на странице [последнего релиза](https://github.com/zxczxczxczxczxczxc1111/soundcloud-desktop/releases/latest). Рядом лежит `SHA256SUMS`, если захочешь сверить файлы.
 
 Клиент обновляется сам: новую версию качает в фоне и ставит, когда ты его закрываешь. Выключить это можно переключателем «Проверять обновления» внизу настроек.
 
