@@ -15,6 +15,9 @@ import { createWave, type WaveApi } from './engine';
 import { createLibrary, type LibraryView } from './library';
 import { createLikes } from './likes';
 import { createMarks } from './marks';
+import { createPicks } from './picks';
+import { createRadar } from './radar';
+import { createShelf, shelfInputsOf } from './shelf';
 import { createWaveSession, type WaveSessionState } from './session';
 import { createTaste, tasteLibraryOf } from './taste';
 import { createTracker } from './tracker';
@@ -121,6 +124,49 @@ export const library = createLibrary({
         return ids;
     },
 });
+
+// Подборки дня, радар релизов и набор из меню трека
+export const shelf = createShelf({
+    userId,
+    likedTracks: () => auth.sc.likedTracks(1000),
+    history: () => auth.sc.history(200),
+    inputs: async (user) => shelfInputsOf(await history.tastePlays(user, Date.now() - 365 * DAY), Date.now()),
+    taste: async () => {
+        const user = userId();
+        return user ? taste.maps(user) : null;
+    },
+    related: (id) => auth.sc.relatedTracks(id),
+    sources,
+    excluded,
+    store: kv('wave.shelf.v1'),
+    texts: WAVE_TEXTS.ru,
+});
+
+export const radar = createRadar({
+    userId,
+    follows: async (user) => (await auth.sc.followings(user, 200)).map((account) => account.id),
+    uploads: (account) => auth.sc.userTracks(account, 20, { background: true }),
+    tracksByIds: (ids) => auth.sc.tracksByIds(ids),
+    taste: async () => {
+        const user = userId();
+        return user ? taste.maps(user) : null;
+    },
+    heard: async () => {
+        const user = userId();
+        const ids = new Set<number>(likes.getSnapshot());
+        if (user) for (const id of await history.heardIds(user, Date.now() - 90 * DAY).catch(() => [])) ids.add(id);
+        return ids;
+    },
+    excluded,
+    store: kv('wave.radar.v1'),
+    texts: WAVE_TEXTS.ru,
+});
+
+export const picks = createPicks();
+
+export function usePicks(): readonly WaveTrack[] {
+    return useSyncExternalStore(picks.subscribe, picks.getSnapshot, picks.getSnapshot);
+}
 
 // Запись прослушиваний: ранние пропуски учат идущую волну, всё остальное идёт во вкус через журнал
 const tracker = createTracker({

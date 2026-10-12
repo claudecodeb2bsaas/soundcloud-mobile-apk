@@ -3,12 +3,13 @@ import { useSyncExternalStore } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, useAuth } from '../auth/instance';
+import { fillText, WAVE_TEXTS } from '../core/waveTexts';
 import type { WaveTrack } from '../core/waveTypes';
 import { artistIdOf } from '../player/format';
 import { player } from '../player/instance';
 import { currentItem } from '../player/queue';
 import { theme } from '../theme';
-import { likes, marks, noteLiked, useLikes, useMarks, wave } from '../wave/instance';
+import { likes, marks, noteLiked, picks, usePicks, useLikes, useMarks, wave } from '../wave/instance';
 
 // Меню трека: одно на приложение, открывается из любого списка через openTrackMenu
 
@@ -56,6 +57,7 @@ export function TrackMenuHost() {
   const signedIn = useAuth().status === 'in';
   const liked = useLikes();
   const data = useMarks();
+  const picked = usePicks();
   if (!track) return null;
 
   const artist = artistIdOf(track);
@@ -67,6 +69,11 @@ export function TrackMenuHost() {
     { label: liked.has(track.id) ? 'Убрать из лайков' : 'В лайки', action: () => void toggleLike(track), off: !signedIn },
     { label: 'Волна от трека', action: () => void wave.start({ kind: 'track', track }), off: !signedIn },
     { label: 'Волна от артиста', action: () => void wave.start({ kind: 'artist', id: artist ?? 0, name: artistName }), off: !signedIn || artist === null },
+    {
+      label: picked.some((item) => item.id === track.id) ? WAVE_TEXTS.ru.menuUnpick : WAVE_TEXTS.ru.menuPick,
+      action: () => { if (picks.toggle(track) === 'full') Alert.alert(fillText(WAVE_TEXTS.ru.toastPickFull, { count: String(picked.length) })); },
+      off: !signedIn,
+    },
     { label: 'Играть следом', action: () => player.insertNext(track) },
     { label: 'В конец очереди', action: () => player.insertLast(track) },
     { label: 'Играть похожее', action: () => void playSimilar(track) },

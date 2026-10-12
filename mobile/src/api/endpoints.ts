@@ -20,6 +20,9 @@ const table = {
     trackCategory: (p: PathParams) => `/tracks/${seg(p, 'id')}/${seg(p, 'category')}`,
     recentTracks: (p: PathParams) => `/recent-tracks/${seg(p, 'tag')}`,
     mixedSelections: () => '/mixed-selections',
+    // Чарты сайта (проверено 12.10.2026): /charts/selections отдаёт Music Charts US и UK, в каждой десять плейлистов;
+    // старые /charts?kind=top дают 404
+    chartSelections: () => '/charts/selections',
     systemPlaylist: (p: PathParams) => `/system-playlists/${seg(p, 'urn')}`,
     playlist: (p: PathParams) => `/playlists/${seg(p, 'id')}`,
     user: (p: PathParams) => `/users/${seg(p, 'id')}`,

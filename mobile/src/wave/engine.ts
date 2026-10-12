@@ -37,7 +37,7 @@ export type WaveSeed =
     | { kind: 'track'; track: WaveTrack }
     | { kind: 'artist'; id: number; name: string }
     /** «Моя музыка»: own это пул в порядке режима (from это название источника), seeds для похожего */
-    | { kind: 'library'; title: string; own: Array<{ track: WaveTrack; from: string }>; order: LibraryOrder; seeds: WaveTrack[] };
+    | { kind: 'library'; title: string; own: Array<{ track: WaveTrack; from: string; reason?: WaveReason }>; order: LibraryOrder; seeds: WaveTrack[] };
 
 export interface WaveExclusions {
     tracks: ReadonlySet<number>;
@@ -416,7 +416,7 @@ export function createWave(api: WaveApi, options: WaveOptions): Wave {
             for (const entry of seed.own) {
                 taken.add(entry.track.id);
                 for (const key of copyKeys(entry.track)) signatures.add(key);
-                own.push({ track: entry.track, reason: { kind: 'library', name: entry.from }, trace: { origin: 'library', seed: 0, score: null, known: false } });
+                own.push({ track: entry.track, reason: entry.reason ?? { kind: 'library', name: entry.from }, trace: { origin: 'library', seed: 0, score: null, known: false } });
             }
             if (seed.order === 'fixed' && own.length >= 10) return own.length;
         }

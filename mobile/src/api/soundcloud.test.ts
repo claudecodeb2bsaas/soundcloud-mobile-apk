@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ApiClient } from './client';
-import { createSoundCloud, idsOf, meOf, nextQueryOf, tracksOf, userOf, usersOf } from './soundcloud';
+import { chartsOf, createSoundCloud, idsOf, meOf, nextQueryOf, tracksOf, userOf, usersOf } from './soundcloud';
 
 function fakeApi(handler: (name: string, path: object, query: object) => unknown) {
   const calls: Array<{ name: string; path: object; query: object }> = [];
@@ -127,5 +127,41 @@ describe('createSoundCloud', () => {
     expect(await sc.resolve('https://soundcloud.com/a')).toEqual({ kind: 'user', id: 1 });
     expect(calls.map((call) => call.name)).toEqual(['searchCategory', 'relatedSounds', 'resolve']);
     expect(calls[1].path).toEqual({ track_id: 5 });
+  });
+});
+
+describe('чарты, плейлисты и лайки целиком', () => {
+  it('chartsOf: подборки стран с плейлистами, без пустых', () => {
+    const body = { collection: [
+      { title: 'Music Charts US', items: { collection: [{ id: 1, kind: 'playlist', title: 'All music genres', track_count: 50, artwork_url: 'a-large.jpg', user: { username: 'Music Charts' } }, { kind: 'playlist' }] } },
+      { title: 'Пусто', items: { collection: [] } },
+    ] };
+    expect(chartsOf(body)).toEqual([{ title: 'Music Charts US', lists: [{ id: 1, title: 'All music genres', count: 50, ids: [], tracks: [], artwork: 'a-large.jpg', owner: 'Music Charts' }] }]);
+    expect(chartsOf(null)).toEqual([]);
+  });
+
+  it('charts идёт в chartSelections', async () => {
+    const { api, calls } = fakeApi(() => ({ collection: [] }));
+    expect(await createSoundCloud(api).charts()).toEqual([]);
+    expect(calls[0].name).toBe('chartSelections');
+  });
+
+  it('playlistTracks добирает заготовки пачкой и хранит порядок сайта', async () => {
+    const { api, calls } = fakeApi((name, _path, query) => {
+      if (name === 'playlist') return { id: 9, title: 'Mix', track_count: 3, tracks: [{ id: 3, kind: 'track', title: 'C' }, { id: 1, kind: 'track' }, { id: 2, kind: 'track' }] };
+      return (String((query as { ids: string }).ids).split(',').map((id) => ({ id: Number(id), kind: 'track', title: 'T' + id })));
+    });
+    const loaded = await createSoundCloud(api).playlistTracks(9);
+    expect(loaded?.tracks.map((t) => t.id)).toEqual([3, 1, 2]);
+    expect(calls.filter((call) => call.name === 'trackBatch').map((call) => (call.query as { ids: string }).ids)).toEqual(['1,2']);
+  });
+
+  it('likedTracks идёт по страницам id до лимита и берёт полные треки', async () => {
+    const { api, calls } = fakeApi((name, _path, query) => {
+      if (name === 'soundLikesIds') return (query as { offset?: string }).offset ? { collection: [4, 5], next_href: null } : { collection: [1, 2, 3], next_href: 'https://api-v2.soundcloud.com/x?offset=3' };
+      return String((query as { ids: string }).ids).split(',').map((id) => ({ id: Number(id), kind: 'track' }));
+    });
+    expect((await createSoundCloud(api).likedTracks(4)).map((t) => t.id)).toEqual([1, 2, 3, 4]);
+    expect(calls.filter((call) => call.name === 'soundLikesIds')).toHaveLength(2);
   });
 });

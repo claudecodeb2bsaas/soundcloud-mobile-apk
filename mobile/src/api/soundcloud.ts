@@ -106,6 +106,8 @@ export interface PlaylistInfo {
     ids: number[];
     /** Полные треки из ответа (заготовки без названия сюда не входят) */
     tracks: WaveTrack[];
+    artwork?: string | null;
+    owner?: string;
 }
 
 export function playlistOf(body: unknown): PlaylistInfo | null {
@@ -120,13 +122,24 @@ export function playlistOf(body: unknown): PlaylistInfo | null {
         count: typeof item.track_count === 'number' ? item.track_count : ids.length,
         ids,
         tracks,
+        artwork: typeof item.artwork_url === 'string' ? item.artwork_url : null,
+        owner: typeof (item.user as { username?: unknown } | null)?.username === 'string' ? (item.user as { username: string }).username : '',
     };
+}
+
+/** Чарты сайта: подборки по странам (Music Charts US/UK), в каждой плейлисты по жанрам. Состав плейлиста грузится отдельно */
+export function chartsOf(body: unknown): Array<{ title: string; lists: PlaylistInfo[] }> {
+    return listOf(body).flatMap((entry) => {
+        const selection = entry && typeof entry === 'object' ? (entry as { title?: unknown; items?: unknown }) : null;
+        const lists = listOf(selection?.items).flatMap((item) => playlistOf(item) ?? []);
+        return lists.length ? [{ title: typeof selection?.title === 'string' ? selection.title : '', lists }] : [];
+    });
 }
 
 const BATCH = 50;
 
 export function createSoundCloud(api: ApiClient) {
-    return {
+    const sc = {
         async me(options?: CallOptions): Promise<Me | null> {
             return meOf((await api.call('me', {}, {}, options)).body);
         },
@@ -185,6 +198,33 @@ export function createSoundCloud(api: ApiClient) {
             return playlistOf((await api.call('playlist', { id }, {}, options)).body);
         },
 
+        /** Плейлист со всеми треками по порядку сайта (до limit): в ответе полные только первые, остальные добираются пачками */
+        async playlistTracks(id: number, limit = 500, options?: CallOptions): Promise<{ info: PlaylistInfo; tracks: WaveTrack[] } | null> {
+            const info = await sc.playlist(id, options);
+            if (!info) return null;
+            const ids = info.ids.slice(0, limit);
+            const full = new Map(info.tracks.map((track) => [track.id, track]));
+            const missing = ids.filter((trackId) => !full.has(trackId));
+            for (const track of missing.length ? await sc.tracksByIds(missing, options) : []) full.set(track.id, track);
+            return { info, tracks: ids.flatMap((trackId) => full.get(trackId) ?? []) };
+        },
+
+        /** Лайки с полными треками, свежие первыми: страницы id по 200, пока не наберётся limit */
+        async likedTracks(limit = 1000, options?: CallOptions): Promise<WaveTrack[]> {
+            const ids: number[] = [];
+            let query: Query | null = { limit: 200 };
+            for (let page = 0; query && ids.length < limit; page++) {
+                const loaded = await sc.likedIds(query, options);
+                ids.push(...loaded.items);
+                query = loaded.next;
+            }
+            return sc.tracksByIds(ids.slice(0, limit), options);
+        },
+
+        async charts(options?: CallOptions): Promise<Array<{ title: string; lists: PlaylistInfo[] }>> {
+            return chartsOf((await api.call('chartSelections', {}, { limit: 20 }, options)).body);
+        },
+
         /** Плейлисты аккаунта без альбомов (до 500) */
         async ownPlaylists(userId: number, options?: CallOptions): Promise<PlaylistInfo[]> {
             const lists: PlaylistInfo[] = [];
@@ -238,6 +278,7 @@ export function createSoundCloud(api: ApiClient) {
             return (await api.call('resolve', {}, { url }, options)).body;
         },
     };
+    return sc;
 }
 
 export type SoundCloud = ReturnType<typeof createSoundCloud>;
