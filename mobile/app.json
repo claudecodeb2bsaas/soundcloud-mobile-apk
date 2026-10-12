@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "SoundCloud Wave",
+    "slug": "soundcloud-wave",
+    "scheme": "scwave",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#121212",
+    "android": {
+      "package": "io.github.claudecodeb2bsaas.soundcloudwave",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": ["expo-router", "expo-status-bar"]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "soundcloud-wave-mobile",
+  "version": "0.1.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "expo": "~57.0.28",
+    "expo-constants": "~57.0.21",
+    "expo-linking": "~57.0.12",
+    "expo-router": "~57.0.26",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.1"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prebuild": "expo prebuild --platform android --no-install"
+  },
+  "private": true
+}

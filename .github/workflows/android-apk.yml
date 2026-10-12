@@ -1,0 +1,36 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/android-apk.yml']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx expo prebuild --platform android --no-install
+      - name: Build release APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soundcloud-wave-apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk
