@@ -1,9 +1,5 @@
-engine.bin
 node_modules
-build
-tsc
 **/.DS_Store
-docs/
 .env
 .env.*
 *.log
