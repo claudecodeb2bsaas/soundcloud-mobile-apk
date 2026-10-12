@@ -1,7 +1,7 @@
 import Storage from 'expo-sqlite/kv-store';
 import { useSyncExternalStore } from 'react';
 import { auth } from '../auth/instance';
-import { createPlayerController, type PlayerState, type Progress } from './controller';
+import { createPlayerController, type MediaAction, type PlayerState, type Progress } from './controller';
 import { createExpoEngine } from './expoEngine';
 import type { SessionStore } from './session';
 import { createStreamResolver } from './stream';
@@ -13,9 +13,14 @@ const session: SessionStore = {
     save: (snapshot) => Storage.setItem(SESSION_KEY, JSON.stringify(snapshot)),
 };
 
+const engine = createExpoEngine();
+
+/** Кнопки шторки Android: назад, вперёд, лайк, дизлайк */
+export const onMediaControl = (listener: (action: MediaAction) => void): (() => void) => engine.onControl?.(listener) ?? (() => undefined);
+
 // Один плеер на приложение
 export const player = createPlayerController({
-    engine: createExpoEngine(),
+    engine,
     resolver: createStreamResolver(auth.api, auth.sc),
     session,
 });

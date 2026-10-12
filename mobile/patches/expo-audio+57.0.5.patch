@@ -1,0 +1,258 @@
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+index 196a5d5..306254e 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+@@ -90,6 +90,10 @@ class AudioControlsService : MediaSessionService() {
+ 
+         ACTION_SEEK_FORWARD -> currentPlayerRef.seekTo(currentPlayerRef.currentPosition + SEEK_INTERVAL_MS)
+         ACTION_SEEK_BACKWARD -> currentPlayerRef.seekTo(currentPlayerRef.currentPosition - SEEK_INTERVAL_MS)
++        ACTION_PREVIOUS -> controlSink?.invoke("previous")
++        ACTION_NEXT -> controlSink?.invoke("next")
++        ACTION_LIKE -> controlSink?.invoke("like")
++        ACTION_DISLIKE -> controlSink?.invoke("dislike")
+       }
+     }
+ 
+@@ -192,17 +196,24 @@ class AudioControlsService : MediaSessionService() {
+       val compactViewIndices = mutableListOf<Int>()
+       var currentIndex = 0
+ 
+-      if (currentOptions?.showSeekBackward == true) {
+-        builder.addAction(
+-          NotificationCompat.Action(
+-            androidx.media3.session.R.drawable.media3_icon_skip_back,
+-            "Seek Backward",
+-            buildActionPendingIntent(ACTION_SEEK_BACKWARD)
+-          )
++      // soundcloud-wave: dislike, previous, play/pause, next, like
++      builder.addAction(
++        NotificationCompat.Action(
++          androidx.media3.session.R.drawable.media3_icon_thumb_down_unfilled,
++          "Dislike",
++          buildActionPendingIntent(ACTION_DISLIKE)
+         )
+-        compactViewIndices.add(currentIndex)
+-        currentIndex++
+-      }
++      )
++      currentIndex++
++      builder.addAction(
++        NotificationCompat.Action(
++          androidx.media3.session.R.drawable.media3_icon_previous,
++          "Previous",
++          buildActionPendingIntent(ACTION_PREVIOUS)
++        )
++      )
++      compactViewIndices.add(currentIndex)
++      currentIndex++
+ 
+       builder.addAction(
+         NotificationCompat.Action(
+@@ -218,16 +229,21 @@ class AudioControlsService : MediaSessionService() {
+       compactViewIndices.add(currentIndex)
+       currentIndex++
+ 
+-      if (currentOptions?.showSeekForward == true) {
+-        builder.addAction(
+-          NotificationCompat.Action(
+-            androidx.media3.session.R.drawable.media3_icon_skip_forward,
+-            "Seek Forward",
+-            buildActionPendingIntent(ACTION_SEEK_FORWARD)
+-          )
++      builder.addAction(
++        NotificationCompat.Action(
++          androidx.media3.session.R.drawable.media3_icon_next,
++          "Next",
++          buildActionPendingIntent(ACTION_NEXT)
+         )
+-        compactViewIndices.add(currentIndex)
+-      }
++      )
++      compactViewIndices.add(currentIndex)
++      builder.addAction(
++        NotificationCompat.Action(
++          androidx.media3.session.R.drawable.media3_icon_heart_unfilled,
++          "Like",
++          buildActionPendingIntent(ACTION_LIKE)
++        )
++      )
+ 
+       style.setShowActionsInCompactView(*compactViewIndices.toIntArray())
+     }
+@@ -240,19 +256,23 @@ class AudioControlsService : MediaSessionService() {
+     val session = mediaSession ?: return
+     val mediaButtons = mutableListOf<CommandButton>()
+ 
+-    // Add seek backward button if enabled
+-    if (currentOptions?.showSeekBackward == true) {
+-      mediaButtons.add(
+-        CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
+-          .setDisplayName("Seek Backward")
+-          .setEnabled(true)
+-          .setSessionCommand(SessionCommand(ACTION_SEEK_BACKWARD, Bundle.EMPTY))
+-          .setSlots(CommandButton.SLOT_BACK)
+-          .build()
+-      )
+-    }
+-
+-    // Add play/pause button (always present)
++    // soundcloud-wave: dislike | previous | play/pause | next | like
++    mediaButtons.add(
++      CommandButton.Builder(CommandButton.ICON_THUMB_DOWN_UNFILLED)
++        .setDisplayName("Dislike")
++        .setEnabled(true)
++        .setSessionCommand(SessionCommand(ACTION_DISLIKE, Bundle.EMPTY))
++        .setSlots(CommandButton.SLOT_BACK_SECONDARY)
++        .build()
++    )
++    mediaButtons.add(
++      CommandButton.Builder(CommandButton.ICON_PREVIOUS)
++        .setDisplayName("Previous")
++        .setEnabled(true)
++        .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS)
++        .setSlots(CommandButton.SLOT_BACK)
++        .build()
++    )
+     mediaButtons.add(
+       CommandButton.Builder(if (isPlaying) CommandButton.ICON_PAUSE else CommandButton.ICON_PLAY)
+         .setDisplayName(if (isPlaying) "Pause" else "Play")
+@@ -261,19 +281,22 @@ class AudioControlsService : MediaSessionService() {
+         .setSlots(CommandButton.SLOT_CENTRAL)
+         .build()
+     )
+-
+-    // Add seek forward button if enabled
+-    if (currentOptions?.showSeekForward == true) {
+-      mediaButtons.add(
+-        CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10)
+-          .setDisplayName("Seek Forward")
+-          .setEnabled(true)
+-          .setSessionCommand(SessionCommand(ACTION_SEEK_FORWARD, Bundle.EMPTY))
+-          .setSlots(CommandButton.SLOT_FORWARD)
+-          .build()
+-      )
+-    }
+-
++    mediaButtons.add(
++      CommandButton.Builder(CommandButton.ICON_NEXT)
++        .setDisplayName("Next")
++        .setEnabled(true)
++        .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT)
++        .setSlots(CommandButton.SLOT_FORWARD)
++        .build()
++    )
++    mediaButtons.add(
++      CommandButton.Builder(CommandButton.ICON_HEART_UNFILLED)
++        .setDisplayName("Like")
++        .setEnabled(true)
++        .setSessionCommand(SessionCommand(ACTION_LIKE, Bundle.EMPTY))
++        .setSlots(CommandButton.SLOT_FORWARD_SECONDARY)
++        .build()
++    )
+     session.setCustomLayout(mediaButtons)
+     session.setMediaButtonPreferences(mediaButtons)
+   }
+@@ -352,6 +375,7 @@ class AudioControlsService : MediaSessionService() {
+     currentPlayer = player
+     currentMetadata = metadata
+     currentOptions = options
++    controlSink = player?.let { p -> { action: String -> p.emit("mediaControlAction", mapOf("action" to action)) } }
+ 
+     metadata?.artworkUrl?.let {
+       loadArtworkFromUrl(it) { bitmap ->
+@@ -414,6 +438,7 @@ class AudioControlsService : MediaSessionService() {
+     currentPlayer?.isActiveForLockScreen = false
+     removePlayerListener()
+     currentPlayer = null
++    controlSink = null
+     currentMetadata = null
+     mediaSession?.release()
+     mediaSession = null
+@@ -559,6 +584,14 @@ class AudioControlsService : MediaSessionService() {
+     const val ACTION_SEEK_FORWARD = "expo.modules.audio.action.SEEK_FORWARD"
+     const val ACTION_SEEK_BACKWARD = "expo.modules.audio.action.SEEK_BACKWARD"
+ 
++    const val ACTION_PREVIOUS = "expo.modules.audio.action.PREVIOUS"
++    const val ACTION_NEXT = "expo.modules.audio.action.NEXT"
++    const val ACTION_LIKE = "expo.modules.audio.action.LIKE"
++    const val ACTION_DISLIKE = "expo.modules.audio.action.DISLIKE"
++
++    // soundcloud-wave: JS player listens to "mediaControlAction" events
++    @Volatile var controlSink: ((String) -> Unit)? = null
++
+     const val SEEK_INTERVAL_MS = 10000L
+   }
+ }
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+index 839aaef..6e7f892 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+@@ -24,17 +24,17 @@ class AudioMediaSessionCallback : MediaSession.Callback {
+             .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+             .add(Player.COMMAND_SEEK_FORWARD)
+             .add(Player.COMMAND_SEEK_BACK)
+-            // Remove track navigation commands
+-            .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+-            .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+-            .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+-            .remove(Player.COMMAND_SEEK_TO_NEXT)
++            // soundcloud-wave: previous/next track are handled in JS
++            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
++            .add(Player.COMMAND_SEEK_TO_NEXT)
+             .build()
+         )
+         .setAvailableSessionCommands(
+           MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+             .add(SessionCommand(AudioControlsService.ACTION_SEEK_BACKWARD, Bundle.EMPTY))
+             .add(SessionCommand(AudioControlsService.ACTION_SEEK_FORWARD, Bundle.EMPTY))
++            .add(SessionCommand(AudioControlsService.ACTION_LIKE, Bundle.EMPTY))
++            .add(SessionCommand(AudioControlsService.ACTION_DISLIKE, Bundle.EMPTY))
+             .build()
+         )
+         .build()
+@@ -50,6 +50,8 @@ class AudioMediaSessionCallback : MediaSession.Callback {
+     args: Bundle
+   ): ListenableFuture<SessionResult> {
+     when (command.customAction) {
++      AudioControlsService.ACTION_LIKE -> AudioControlsService.controlSink?.invoke("like")
++      AudioControlsService.ACTION_DISLIKE -> AudioControlsService.controlSink?.invoke("dislike")
+       AudioControlsService.ACTION_SEEK_FORWARD -> {
+         session.player.seekTo(session.player.currentPosition + AudioControlsService.SEEK_INTERVAL_MS)
+       }
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
+index 18203a3..331d43e 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
+@@ -36,6 +36,32 @@ internal class MetadataInjectingPlayer(
+     super.removeListener(forwardingListener ?: listener)
+   }
+ 
++  // soundcloud-wave: the real ExoPlayer holds one item, but the queue lives in JS. Advertise
++  // previous/next and seekbar commands and route them to JS through AudioControlsService.controlSink.
++  override fun getAvailableCommands(): Player.Commands =
++    super.getAvailableCommands().buildUpon()
++      .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
++      .add(Player.COMMAND_SEEK_TO_PREVIOUS)
++      .add(Player.COMMAND_SEEK_TO_NEXT)
++      .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
++      .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
++      .build()
++
++  override fun isCommandAvailable(command: Int): Boolean = availableCommands.contains(command)
++
++  override fun hasNextMediaItem(): Boolean = true
++
++  override fun hasPreviousMediaItem(): Boolean = true
++
++  override fun isCurrentMediaItemSeekable(): Boolean = true
++
++  override fun seekToNext() { AudioControlsService.controlSink?.invoke("next") }
++
++  override fun seekToNextMediaItem() { AudioControlsService.controlSink?.invoke("next") }
++
++  override fun seekToPrevious() { AudioControlsService.controlSink?.invoke("previous") }
++
++  override fun seekToPreviousMediaItem() { AudioControlsService.controlSink?.invoke("previous") }
+   override fun getMediaMetadata(): MediaMetadata {
+     val metadata = injectedMetadata
+     return super.getMediaMetadata()

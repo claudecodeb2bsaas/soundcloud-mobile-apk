@@ -1,11 +1,10 @@
 import { router } from 'expo-router';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../auth/instance';
 import { ProgressBar } from '../components/ProgressBar';
-import { openTrackMenu, toggleLike } from '../components/TrackMenu';
-import { useLikes } from '../wave/instance';
-import { artwork, clock, errorText } from '../player/format';
+import { openTrackMenu } from '../components/TrackMenu';
+import { DislikeButton, LikeButton } from '../components/TrackReactions';
+import { artwork, errorText } from '../player/format';
 import { player, usePlayerState, useProgress } from '../player/instance';
 import { currentItem } from '../player/queue';
 import { theme } from '../theme';
@@ -14,9 +13,7 @@ const REPEAT_LABEL = { off: 'Повтор выкл', all: 'Повтор всех
 
 export default function Player() {
   const state = usePlayerState();
-  const signedIn = useAuth().status === 'in';
-  const liked = useLikes();
-  const { position, duration } = useProgress();
+  const { position } = useProgress();
   const item = currentItem(state.queue);
   const cover = artwork(item?.track.artwork_url, 't500x500');
   const busy = state.status === 'loading';
@@ -47,34 +44,14 @@ export default function Player() {
               {item.track.user?.username ?? ''}
             </Text>
             {item.reason ? <Text style={styles.muted}>{item.reason}</Text> : null}
-            {signedIn ? (
-              <View style={styles.actions}>
-                <Pressable onPress={() => void toggleLike(item.track)} hitSlop={10} accessibilityLabel={liked.has(item.track.id) ? 'Убрать из лайков' : 'В лайки'}>
-                  <Text style={[styles.heart, liked.has(item.track.id) && styles.on]}>{liked.has(item.track.id) ? '♥' : '♡'}</Text>
-                </Pressable>
-                <Pressable onPress={() => openTrackMenu(item.track)} hitSlop={10} accessibilityLabel="Меню трека">
-                  <Text style={styles.heart}>⋯</Text>
-                </Pressable>
-              </View>
-            ) : null}
             {state.preview ? <Text style={styles.warn}>Отрывок 30 секунд: полный трек только по подписке</Text> : null}
             {state.status === 'error' ? <Text style={styles.warn}>{errorText(state.error)}</Text> : null}
           </View>
 
-          <View>
-            <ProgressBar onSeek={(seconds) => player.seek(seconds)} />
-            <View style={styles.times}>
-              <Text style={styles.muted}>{clock(position)}</Text>
-              <Text style={styles.muted}>{clock(duration)}</Text>
-            </View>
-          </View>
+          <ProgressBar times onSeek={(seconds) => player.seek(seconds)} />
 
           <View style={styles.controls}>
-            <Pressable onPress={() => player.cycleRepeat()} hitSlop={10} accessibilityLabel={REPEAT_LABEL[state.queue.repeat]}>
-              <Text style={[styles.small, state.queue.repeat !== 'off' && styles.on]}>
-                {state.queue.repeat === 'one' ? '↻1' : '↻'}
-              </Text>
-            </Pressable>
+            <DislikeButton track={item.track} size={32} />
             <Pressable onPress={() => player.previous()} hitSlop={10} accessibilityLabel="Предыдущий трек">
               <Text style={styles.skip}>◀◀</Text>
             </Pressable>
@@ -84,8 +61,23 @@ export default function Player() {
             <Pressable onPress={() => player.next()} hitSlop={10} accessibilityLabel="Следующий трек">
               <Text style={styles.skip}>▶▶</Text>
             </Pressable>
+            <LikeButton track={item.track} size={32} />
+          </View>
+
+          <View style={styles.controls}>
+            <Pressable onPress={() => player.cycleRepeat()} hitSlop={10} accessibilityLabel={REPEAT_LABEL[state.queue.repeat]}>
+              <Text style={[styles.small, state.queue.repeat !== 'off' && styles.on]}>
+                {state.queue.repeat === 'one' ? '↻1' : '↻'}
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => player.seek(position - 15)} hitSlop={10} accessibilityLabel="Назад на 15 секунд">
+              <Text style={styles.small}>-15</Text>
+            </Pressable>
             <Pressable onPress={() => player.seek(position + 15)} hitSlop={10} accessibilityLabel="Вперёд на 15 секунд">
               <Text style={styles.small}>+15</Text>
+            </Pressable>
+            <Pressable onPress={() => openTrackMenu(item.track)} hitSlop={10} accessibilityLabel="Меню трека">
+              <Text style={styles.small}>⋯</Text>
             </Pressable>
           </View>
         </View>

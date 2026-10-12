@@ -27,7 +27,12 @@ export interface EngineStatus {
     error: string | null;
 }
 
+/** Кнопки шторки Android */
+export type MediaAction = 'previous' | 'next' | 'like' | 'dislike';
+
 export interface AudioEngine {
+    /** Нажатия кнопок шторки; нет у движков без системного уведомления */
+    onControl?(listener: (action: MediaAction) => void): () => void;
     load(url: string, meta: TrackMeta, options: { autoplay: boolean; startAt: number }): void;
     play(): void;
     pause(): void;

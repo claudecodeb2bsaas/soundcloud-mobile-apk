@@ -53,6 +53,13 @@ function purgeQueue(): void {
   if (now && bad(now.track)) player.next();
 }
 
+/** Дизлайк: у SoundCloud такого API нет, отметка локальная; вкус и волна учитывают её сразу, трек уходит из очереди. Повтор снимает отметку */
+export function toggleDislike(track: WaveTrack): void {
+  if (!marks.toggleTrack(track)) return;
+  wave.feedback(track, -1);
+  purgeQueue();
+}
+
 export function TrackMenuHost() {
   const track = useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => target, () => target);
   const insets = useSafeAreaInsets();
@@ -83,7 +90,7 @@ export function TrackMenuHost() {
     { label: 'Поделиться', action: () => void Share.share({ message: track.permalink_url ?? '' }), off: !track.permalink_url },
     { label: 'Скачать обложку', action: () => void saveArtwork(track.artwork_url), off: !track.artwork_url },
     { label: 'Скачать аватар артиста', action: () => void saveArtwork(track.user?.avatar_url), off: !track.user?.avatar_url },
-    { label: disliked ? 'Вернуть в подбор' : 'Не нравится', action: () => { marks.toggleTrack(track); purgeQueue(); } },
+    { label: disliked ? 'Вернуть в подбор' : 'Не нравится', action: () => toggleDislike(track) },
     {
       label: hidden ? 'Показывать артиста' : 'Скрыть артиста',
       action: () => { if (artist !== null) { marks.toggleArtist(artist, artistName); purgeQueue(); } },

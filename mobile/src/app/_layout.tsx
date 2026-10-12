@@ -4,10 +4,11 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { MiniPlayer } from '../components/MiniPlayer';
-import { TrackMenuHost } from '../components/TrackMenu';
+import { toggleDislike, toggleLike, TrackMenuHost } from '../components/TrackMenu';
 import { WaveOverlay } from '../components/WaveOverlay';
 import { auth } from '../auth/instance';
-import { player } from '../player/instance';
+import { onMediaControl, player } from '../player/instance';
+import { currentItem } from '../player/queue';
 import { useSettings } from '../settings/instance';
 import { theme } from '../theme';
 import { checkRadar, syncRadarTask } from '../background';
@@ -25,9 +26,23 @@ function useNotificationRedirect() {
   }, []);
 }
 
+/** Кнопки шторки Android: назад, вперёд, лайк и дизлайк текущего трека */
+function useMediaControls() {
+  useEffect(
+    () =>
+      onMediaControl((action) => {
+        if (action === 'previous') return player.previous();
+        if (action === 'next') return player.next();
+        const track = currentItem(player.getState().queue)?.track;
+        if (track) return action === 'like' ? void toggleLike(track) : toggleDislike(track);
+      }),
+    [],
+  );
+}
 export default function RootLayout() {
   const { radarEnabled } = useSettings();
   useNotificationRedirect();
+  useMediaControls();
 
   useEffect(() => {
     // Сначала вход, потом сохранённая очередь: без входа адреса потоков не получить.

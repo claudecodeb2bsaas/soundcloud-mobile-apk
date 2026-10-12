@@ -1,6 +1,6 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioStatus } from 'expo-audio';
 import { PermissionsAndroid, Platform } from 'react-native';
-import type { AudioEngine, EngineStatus, TrackMeta } from './controller';
+import type { AudioEngine, EngineStatus, MediaAction, TrackMeta } from './controller';
 
 // Движок на expo-audio (ExoPlayer на Android). Один плеер на всё приложение: адрес меняется через replace.
 // Фоновая игра держится на сервисе expo-audio и управлении с экрана блокировки (setActiveForLockScreen).
@@ -27,6 +27,12 @@ export function createExpoEngine(): AudioEngine {
     let startAt = 0;
     let lockActive = false;
     let asked = false;
+    const controls = new Set<(action: MediaAction) => void>();
+    // Кнопки шторки (назад, вперёд, лайк, дизлайк): событие шлёт патч patches/expo-audio+*.patch
+    const controlSubscription = (player as unknown as { addListener(name: string, cb: (e: { action: MediaAction }) => void): { remove(): void } }).addListener(
+        'mediaControlAction',
+        (event) => { for (const listener of [...controls]) listener(event.action); },
+    );
 
     const subscription = player.addListener('playbackStatusUpdate', (s: AudioStatus) => {
         if (!armed) {
@@ -57,7 +63,8 @@ export function createExpoEngine(): AudioEngine {
             player.replace({ uri: url });
             if (options.autoplay) player.play();
             if (!lockActive) {
-                player.setActiveForLockScreen(true, meta, { showSeekBackward: true, showSeekForward: true });
+                // Перемотку ±10 с заменяют кнопки трека из патча, полоса прогресса остаётся
+                player.setActiveForLockScreen(true, meta, { showSeekBackward: false, showSeekForward: false });
                 lockActive = true;
             } else player.updateLockScreenMetadata(meta);
             if (!asked) {
@@ -72,8 +79,14 @@ export function createExpoEngine(): AudioEngine {
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
+        onControl(listener) {
+            controls.add(listener);
+            return () => controls.delete(listener);
+        },
         release() {
             listeners.clear();
+            controls.clear();
+            controlSubscription.remove();
             subscription.remove();
             player.clearLockScreenControls();
             player.remove();

@@ -6,6 +6,7 @@ import { artwork } from '../player/format';
 import { player, usePlayerState } from '../player/instance';
 import { theme } from '../theme';
 import { ProgressBar } from './ProgressBar';
+import { DislikeButton, LikeButton } from './TrackReactions';
 
 const HIDDEN_ON = ['/player', '/queue', '/login'];
 
@@ -32,12 +33,17 @@ export function MiniPlayer() {
             {state.status === 'error' ? 'Ошибка воспроизведения' : item.track.user?.username ?? ''}
           </Text>
         </View>
-        <Pressable style={styles.button} onPress={() => player.toggle()} hitSlop={8}>
+        <DislikeButton track={item.track} size={18} />
+        <Pressable style={styles.button} onPress={() => player.previous()} hitSlop={8} accessibilityLabel="Предыдущий трек">
+          <Text style={styles.glyph}>◀◀</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={() => player.toggle()} hitSlop={8} accessibilityLabel={state.status === 'playing' ? 'Пауза' : 'Играть'}>
           {busy ? <ActivityIndicator color={theme.text} /> : <Text style={styles.glyph}>{state.status === 'playing' ? '❚❚' : '▶'}</Text>}
         </Pressable>
-        <Pressable style={styles.button} onPress={() => player.next()} hitSlop={8}>
+        <Pressable style={styles.button} onPress={() => player.next()} hitSlop={8} accessibilityLabel="Следующий трек">
           <Text style={styles.glyph}>▶▶</Text>
         </Pressable>
+        <LikeButton track={item.track} size={20} />
       </Pressable>
     </View>
   );
@@ -45,11 +51,11 @@ export function MiniPlayer() {
 
 const styles = StyleSheet.create({
   root: { backgroundColor: theme.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#ffffff1f' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
   cover: { width: 44, height: 44, borderRadius: 4, backgroundColor: '#2a2a2a' },
   meta: { flex: 1, gap: 2 },
   title: { color: theme.text, fontSize: 14, fontWeight: '600' },
   artist: { color: theme.muted, fontSize: 12 },
-  button: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  glyph: { color: theme.text, fontSize: 16 },
+  button: { width: 34, height: 40, alignItems: 'center', justifyContent: 'center' },
+  glyph: { color: theme.text, fontSize: 15 },
 });
