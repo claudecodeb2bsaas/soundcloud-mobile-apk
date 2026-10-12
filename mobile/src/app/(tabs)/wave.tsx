@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RequireAuth } from '../../components/Loadable';
+import { MyMusic } from '../../components/MyMusic';
+import type { WaveMood } from '../../core/waveMood';
+import { WAVE_TEXTS } from '../../core/waveTexts';
 import { theme } from '../../theme';
 import { wave, useWave } from '../../wave/instance';
 
@@ -9,6 +12,16 @@ const MODES = [
   { id: 'similar', label: 'Похожее', hint: 'Музыка, похожая на твою историю и лайки' },
   { id: 'fresh', label: 'Новое', hint: 'Ещё не слышанное и не лайкнутое, больше новых артистов' },
 ] as const;
+
+const T = WAVE_TEXTS.ru;
+const PRESETS: Array<{ id: WaveMood | ''; label: string }> = [
+  { id: '', label: 'Любое' },
+  { id: 'happy', label: T.moodHappy },
+  { id: 'sad', label: T.moodSad },
+  { id: 'aggressive', label: T.moodAggressive },
+  { id: 'calm', label: T.moodCalm },
+  { id: 'energetic', label: T.moodEnergetic },
+];
 
 const MESSAGES = {
   empty: 'Подобрать нечего: послушай или лайкни что-нибудь, либо смени жанр',
@@ -47,6 +60,16 @@ function WaveScreen() {
       />
       <Text style={styles.muted}>Несколько жанров через запятую. Применяется по кнопке на клавиатуре, идущая волна начнётся заново.</Text>
 
+      <Text style={styles.label}>Настроение</Text>
+      <View style={styles.row}>
+        {PRESETS.map((preset) => (
+          <Pressable key={preset.id || 'any'} onPress={() => wave.configure({ preset: preset.id })} style={[styles.chip, state.preset === preset.id && styles.chipOn]}>
+            <Text style={[styles.chipText, state.preset === preset.id && styles.chipTextOn]}>{preset.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.muted}>Только для обычной волны: у волны от трека, артиста и «Моей музыки» своё настроение.</Text>
+
       <Pressable style={[styles.main, running && styles.mainOff]} onPress={() => (running ? wave.stop() : void wave.start())} disabled={loading}>
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.mainText}>{running ? 'Остановить волну' : 'Включить волну'}</Text>}
       </Pressable>
@@ -57,6 +80,8 @@ function WaveScreen() {
         </Text>
       ) : null}
       {state.status === 'empty' || state.status === 'error' ? <Text style={styles.warn}>{MESSAGES[state.status]}</Text> : null}
+
+      <MyMusic />
     </ScrollView>
   );
 }
@@ -77,7 +102,7 @@ const styles = StyleSheet.create({
   title: { color: theme.text, fontSize: 22, fontWeight: '700', paddingHorizontal: 16, paddingVertical: 12 },
   content: { padding: 16, gap: 10 },
   label: { color: theme.text, fontSize: 15, fontWeight: '600', marginTop: 8 },
-  row: { flexDirection: 'row', gap: 8 },
+  row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 18, backgroundColor: theme.surface },
   chipOn: { backgroundColor: theme.accent },
   chipText: { color: theme.muted, fontSize: 15 },

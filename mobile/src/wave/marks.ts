@@ -42,7 +42,17 @@ function parse(text: string | null): MarksData {
     }
 }
 
-export function createMarks(store: TextStore): Marks {
+/** Правка отметки для модели вкуса: «Не нравится» учит вкус минусом, скрытый артист тоже */
+export interface MarkChange {
+    kind: 'track' | 'artist';
+    on: boolean;
+    id: number;
+    /** У отметки трека: сам трек (метки и название для вкуса) */
+    track?: WaveTrack;
+    name: string;
+}
+
+export function createMarks(store: TextStore, onChange?: (change: MarkChange) => void): Marks {
     let data = parse(store.get());
     const listeners = new Set<() => void>();
 
@@ -71,8 +81,16 @@ export function createMarks(store: TextStore): Marks {
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
-        toggleTrack: (track) => toggle('tracks', track.id, `${track.user?.username ?? ''} — ${track.title ?? ''}`.trim()),
-        toggleArtist: (id, name) => toggle('artists', id, name),
+        toggleTrack(track) {
+            const on = toggle('tracks', track.id, `${track.user?.username ?? ''} — ${track.title ?? ''}`.trim());
+            onChange?.({ kind: 'track', on, id: track.id, track, name: track.user?.username ?? '' });
+            return on;
+        },
+        toggleArtist(id, name) {
+            const on = toggle('artists', id, name);
+            onChange?.({ kind: 'artist', on, id, name });
+            return on;
+        },
         hasTrack: (id) => id in data.tracks,
         hasArtist: (id) => id in data.artists,
     };

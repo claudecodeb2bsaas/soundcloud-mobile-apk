@@ -16,6 +16,8 @@ const table = {
     relatedSounds: (p: PathParams) => `/tracks/${seg(p, 'track_id')}/related`,
     searchCategory: (p: PathParams) => `/search/${seg(p, 'category')}`,
     resolve: () => '/resolve',
+    // likers и подобное: /tracks/{id}/likers (соседи по вкусу)
+    trackCategory: (p: PathParams) => `/tracks/${seg(p, 'id')}/${seg(p, 'category')}`,
     recentTracks: (p: PathParams) => `/recent-tracks/${seg(p, 'tag')}`,
     mixedSelections: () => '/mixed-selections',
     systemPlaylist: (p: PathParams) => `/system-playlists/${seg(p, 'urn')}`,

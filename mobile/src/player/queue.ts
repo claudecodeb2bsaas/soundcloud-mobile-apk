@@ -10,6 +10,17 @@ export interface QueueItem {
     track: WaveTrack;
     /** Почему трек в очереди (подпись волны); пусто у обычной очереди */
     reason?: string;
+    /** Откуда запись для истории и вкуса; пусто у обычной очереди */
+    meta?: ItemMeta;
+}
+
+export interface ItemMeta {
+    /** 'wave:similar', 'wave:track', 'wave:library', ... */
+    source: string;
+    /** Вид показанной причины и исходной (до подмены вкусом) */
+    why?: string;
+    origin?: string;
+    preset?: string;
 }
 
 export interface QueueState {
@@ -20,9 +31,12 @@ export interface QueueState {
 }
 
 let sequence = 0;
-export function makeItem(track: WaveTrack, reason?: string): QueueItem {
+export function makeItem(track: WaveTrack, reason?: string, meta?: ItemMeta): QueueItem {
     sequence += 1;
-    return reason ? { key: `q${sequence}`, track, reason } : { key: `q${sequence}`, track };
+    const item: QueueItem = { key: `q${sequence}`, track };
+    if (reason) item.reason = reason;
+    if (meta) item.meta = meta;
+    return item;
 }
 
 export const emptyQueue = (repeat: RepeatMode = 'off'): QueueState => ({ items: [], index: 0, repeat });

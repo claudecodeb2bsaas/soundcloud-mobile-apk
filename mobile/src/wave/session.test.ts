@@ -32,6 +32,7 @@ const FIRST = [1, 2, 3, 4, 5, 6];
 function setup(batches: number[][], options: { fail?: boolean; failFrom?: number } = {}) {
   const player = fakePlayer();
   const requested: number[] = [];
+  const feedback: string[] = [];
   const created: Array<{ mode: string; genre: string; seed: unknown }> = [];
   const stored: { value: string | null } = { value: null };
   let time = 0;
@@ -49,12 +50,13 @@ function setup(batches: number[][], options: { fail?: boolean; failFrom?: number
           if (options.fail || (options.failFrom !== undefined && requested.length > options.failFrom)) throw new Error('net');
           return (queue.shift() ?? []).map(candidate);
         },
+        feedback: (t, sign) => { feedback.push(`${t.id}:${sign}`); },
       };
       return wave;
     },
   };
   const session = createWaveSession(deps);
-  return { session, player, requested, created, stored, advance: (ms: number) => { time += ms; } };
+  return { session, player, requested, feedback, created, stored, advance: (ms: number) => { time += ms; } };
 }
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -154,7 +156,7 @@ describe('сессия волны', () => {
   it('configure хранит настройки и перезапускает идущую волну с тем же зерном', async () => {
     const ctx = setup([[1, 2, 3], [4, 5, 6]]);
     ctx.session.configure({ mode: 'fresh', genre: 'phonk' });
-    expect(JSON.parse(ctx.stored.value ?? '{}')).toEqual({ mode: 'fresh', genre: 'phonk' });
+    expect(JSON.parse(ctx.stored.value ?? '{}')).toEqual({ mode: 'fresh', genre: 'phonk', preset: '' });
     expect(ctx.created).toEqual([]);
     await ctx.session.start({ kind: 'artist', id: 5, name: 'Five' });
     ctx.session.configure({ mode: 'similar' });
@@ -166,9 +168,36 @@ describe('сессия волны', () => {
   });
 
   it('parseSettings терпит мусор', () => {
-    expect(parseSettings(null)).toEqual({ mode: 'similar', genre: '' });
-    expect(parseSettings('{"mode":"fresh","genre":"x"}')).toEqual({ mode: 'fresh', genre: 'x' });
-    expect(parseSettings('{{')).toEqual({ mode: 'similar', genre: '' });
-    expect(parseSettings('{"mode":5,"genre":7}')).toEqual({ mode: 'similar', genre: '' });
+    expect(parseSettings(null)).toEqual({ mode: 'similar', genre: '', preset: '' });
+    expect(parseSettings('{"mode":"fresh","genre":"x","preset":"calm"}')).toEqual({ mode: 'fresh', genre: 'x', preset: 'calm' });
+    expect(parseSettings('{{')).toEqual({ mode: 'similar', genre: '', preset: '' });
+    expect(parseSettings('{"mode":5,"genre":7,"preset":"loud"}')).toEqual({ mode: 'similar', genre: '', preset: '' });
+  });
+
+  it('треки несут источник, причину и настроение для журнала', async () => {
+    const ctx = setup([FIRST]);
+    ctx.session.configure({ preset: 'calm' });
+    await ctx.session.start();
+    expect(ctx.player.queue.items[0].meta).toMatchObject({ source: 'wave:similar', why: 'similar', preset: 'calm' });
+    await ctx.session.start({ kind: 'artist', id: 5, name: 'Five' });
+    expect(ctx.player.queue.items[0].meta).toMatchObject({ source: 'wave:artist' });
+    expect(ctx.player.queue.items[0].meta?.preset).toBeUndefined();
+  });
+
+  it('feedback доходит до волны только пока она идёт', async () => {
+    const ctx = setup([FIRST]);
+    ctx.session.feedback(track(1), -1);
+    await ctx.session.start();
+    ctx.session.feedback(track(2), -1);
+    ctx.session.stop();
+    ctx.session.feedback(track(3), 1);
+    expect(ctx.feedback).toEqual(['2:-1']);
+  });
+
+  it('«Моя музыка» ставится как волна от набора', async () => {
+    const ctx = setup([FIRST]);
+    await ctx.session.start({ kind: 'library', title: 'Лайки и Chill', own: [], order: 'fixed', seeds: [] });
+    expect(ctx.session.getState().seedLabel).toBe('Лайки и Chill');
+    expect(ctx.player.queue.items[0].meta?.source).toBe('wave:library');
   });
 });

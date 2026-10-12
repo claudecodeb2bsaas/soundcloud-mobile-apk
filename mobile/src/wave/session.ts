@@ -1,5 +1,6 @@
 import { reasonText } from '../core/waveTexts';
-import type { WaveCandidate, WaveMode, WaveTexts } from '../core/waveTypes';
+import { moodList, type WaveMood } from '../core/waveMood';
+import type { WaveCandidate, WaveMode, WaveTexts, WaveTrack } from '../core/waveTypes';
 import type { PlayerController } from '../player/controller';
 import { currentItem, makeItem, type QueueItem } from '../player/queue';
 import type { TextStore } from './marks';
@@ -14,6 +15,8 @@ export interface WaveSettings {
     mode: WaveMode;
     /** Жанры через запятую или слэш; пусто: любой */
     genre: string;
+    /** Настроение; пусто: любое */
+    preset: WaveMood | '';
 }
 
 export interface WaveSessionState extends WaveSettings {
@@ -30,6 +33,8 @@ export interface WaveSession {
     stop(): void;
     /** Меняет настройки (хранятся) и, если волна идёт, запускает её заново */
     configure(patch: Partial<WaveSettings>): void;
+    /** Трек волны пропущен рано (-1) или лайкнут (1): волна учитывает это до конца сессии. Чужие треки игнорируются */
+    feedback(track: WaveTrack, sign: 1 | -1): void;
 }
 
 export interface WaveSessionDeps {
@@ -47,10 +52,14 @@ const RETRY_MS = 15000;
 
 export function parseSettings(text: string | null): WaveSettings {
     try {
-        const raw = JSON.parse(text ?? 'null') as { mode?: unknown; genre?: unknown } | null;
-        return { mode: raw?.mode === 'fresh' ? 'fresh' : 'similar', genre: typeof raw?.genre === 'string' ? raw.genre.slice(0, 100) : '' };
+        const raw = JSON.parse(text ?? 'null') as { mode?: unknown; genre?: unknown; preset?: unknown } | null;
+        return {
+            mode: raw?.mode === 'fresh' ? 'fresh' : 'similar',
+            genre: typeof raw?.genre === 'string' ? raw.genre.slice(0, 100) : '',
+            preset: moodList().find((mood) => mood === raw?.preset) ?? '',
+        };
     } catch {
-        return { mode: 'similar', genre: '' };
+        return { mode: 'similar', genre: '', preset: '' };
     }
 }
 
@@ -75,9 +84,13 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
         for (const listener of [...listeners]) listener();
     };
 
+    // Источник для журнала: 'wave:similar', 'wave:track', 'wave:library'; причина и исходная причина (до подмены вкусом)
     function itemsOf(list: WaveCandidate[]): QueueItem[] {
+        const source = 'wave:' + (seed ? seed.kind : settings.mode);
         return list.map((candidate) => {
-            const item = makeItem(candidate.track, reasonText(candidate.reason, texts));
+            const item = makeItem(candidate.track, reasonText(candidate.reason, texts), {
+                source, why: candidate.reason.kind, origin: candidate.trace?.origin, preset: seed ? undefined : settings.preset || undefined,
+            });
             owned.add(item.key);
             return item;
         });
@@ -137,7 +150,7 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
         seed = next;
         drained = false;
         failedAt = -Infinity;
-        const label = next ? (next.kind === 'track' ? next.track.title ?? '' : next.name) : '';
+        const label = next ? (next.kind === 'track' ? next.track.title ?? '' : next.kind === 'artist' ? next.name : next.title) : '';
         set({ ...settings, status: 'loading', seedLabel: label });
         let list: WaveCandidate[];
         try {
@@ -159,7 +172,7 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
         const items = itemsOf(list);
         // От трека сам трек играет первым
         if (next?.kind === 'track') {
-            const item = makeItem(next.track, reasonText({ kind: 'seedTrack' }, texts));
+            const item = makeItem(next.track, reasonText({ kind: 'seedTrack' }, texts), { source: 'wave:track', why: 'seedTrack' });
             owned.add(item.key);
             items.unshift(item);
         }
@@ -175,9 +188,12 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
         },
         start,
         stop,
+        feedback(track, sign) {
+            if (wave && state.status === 'running') wave.feedback(track, sign);
+        },
         configure(patch) {
             const next = { ...settings, ...patch };
-            if (next.mode === settings.mode && next.genre === settings.genre) return;
+            if (next.mode === settings.mode && next.genre === settings.genre && next.preset === settings.preset) return;
             settings = next;
             try {
                 deps.settings.set(JSON.stringify(settings));

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { WaveTrack } from '../core/waveTypes';
+import { tasteMaps } from '../core/waveTaste';
+import type { ScMix } from '../core/wave/sources';
+import type { TasteMaps, WaveTrack } from '../core/waveTypes';
 import { createWave, type WaveApi } from './engine';
 
 const names = ['Aurora', 'Basalt', 'Cinder', 'Delta', 'Ember', 'Fjord', 'Garnet', 'Harbor', 'Indigo', 'Jasper', 'Kestrel', 'Lantern', 'Meridian', 'Nebula', 'Obsidian', 'Prism', 'Quartz', 'Rift', 'Solstice', 'Tundra'];
@@ -126,5 +128,158 @@ describe('волна от трека и артиста', () => {
     const [a, b] = await Promise.all([wave.next(4), wave.next(4)]);
     const all = [...ids(a), ...ids(b)];
     expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// ---- полные алгоритмы: вкус, станция, подборки, соседи, настроение, «Моя музыка» ----
+const maps = (input: object) => tasteMaps({ version: 7, artists: [], credits: [], families: [], tags: [], markers: [], tracks: [], langs: [], contexts: [], sources: [], ...input }) as TasteMaps;
+const mix = (ids: number[]): ScMix => ({ kind: 'mix', title: 'Your Mix 1', urn: 'soundcloud:system-playlists:your-moods:1', ids, owner: 0 });
+const sourcesApi = (extra: Partial<NonNullable<WaveApi['sources']>> = {}): NonNullable<WaveApi['sources']> => ({
+  relatedArtists: async () => [],
+  topTracks: async () => [],
+  scMixes: async () => [],
+  tracksByIds: async (list) => list.map((id) => track(id)),
+  neighbors: async () => [],
+  ...extra,
+});
+
+describe('вкус в подборе', () => {
+  it('любимый артист получает причину по вкусу, трек с сильным минусом не берётся', async () => {
+    const api = fakeApi({
+      related: async () => [track(10), track(11), track(12), track(13), track(14), track(15)],
+      taste: async () => maps({ artists: [[1010, 6]], tracks: [[11, -2]] }),
+    });
+    const batch = await createWave(api, { mode: 'similar' }).next(10);
+    expect(ids(batch)).not.toContain(11);
+    expect(batch.find((c) => c.track.id === 10)?.reason).toEqual({ kind: 'tasteArtist', artist: 'artist10' });
+  });
+
+  it('вкус не загрузился: подбор идёт перемешиванием', async () => {
+    const api = fakeApi({ taste: async () => { throw new Error('db'); } });
+    expect((await createWave(api, { mode: 'similar' }).next(5)).length).toBe(5);
+  });
+
+  it('кириллица от неизвестного артиста не проходит, от знакомого проходит', async () => {
+    const cyr = (id: number, user: number): WaveTrack => track(id, { title: 'Привет мир ' + id, user_id: user, user: { id: user, username: 'u' + user } });
+    const api = fakeApi({ related: async () => [cyr(20, 5000), cyr(21, 1001), track(22)], taste: async () => maps({ artists: [[1001, 2]] }) });
+    const batch = await createWave(api, { mode: 'similar' }).next(10);
+    expect(ids(batch).sort()).toEqual([21, 22]);
+  });
+
+  it('feedback учитывает отданные треки и не падает на чужих', async () => {
+    const wave = createWave(fakeApi(), { mode: 'similar' });
+    const batch = await wave.next(6);
+    wave.feedback(batch[0].track, -1);
+    wave.feedback(track(99999), -1);
+    expect((await wave.next(3)).length).toBeGreaterThan(0);
+  });
+});
+
+describe('источники', () => {
+  it('станция трека берётся, когда похожих мало, и идёт со своим происхождением', async () => {
+    const stations: number[] = [];
+    const api = fakeApi({
+      related: async () => [],
+      station: async (id) => { stations.push(id); return [track(70), track(71), track(72)]; },
+    });
+    const batch = await createWave(api, { mode: 'similar', seed: { kind: 'track', track: track(77) } }).next(3);
+    expect(stations).toEqual([77]);
+    expect(ids(batch).sort()).toEqual([70, 71, 72]);
+    expect(batch.every((c) => c.trace?.origin === 'station' && c.reason.kind === 'similar')).toBe(true);
+  });
+
+  it('подборки SoundCloud: по десять за проход, причина с названием подборки', async () => {
+    const api = fakeApi({ related: async () => [], sources: sourcesApi({ scMixes: async () => [mix(Array.from({ length: 25 }, (_, i) => 300 + i))] }) });
+    const batch = await createWave(api, { mode: 'similar' }).next(12);
+    expect(batch.length).toBe(12);
+    expect(batch.every((c) => c.reason.kind === 'scMix' && c.reason.name === 'Your Mix 1')).toBe(true);
+  });
+
+  it('соседи по вкусу: находки без уже лайкнутого, причина neighbors', async () => {
+    const api = fakeApi({
+      related: async () => [],
+      sources: sourcesApi({ neighbors: async () => [{ id: 3, count: 4 }, { id: 400, count: 3 }, { id: 401, count: 2 }] }),
+    });
+    const batch = await createWave(api, { mode: 'similar' }).next(5);
+    expect(Object.fromEntries(batch.map((c) => [c.track.id, c.reason.kind]))).toEqual({ 400: 'neighbors', 401: 'neighbors' });
+  });
+
+  it('начало волны: последнее дослушанное зерном и лучший трек похожего артиста его автора', async () => {
+    const asked: number[] = [];
+    const api = fakeApi({
+      related: async (id) => { asked.push(id); return []; },
+      recentDone: async () => [track(55)],
+      sources: sourcesApi({ relatedArtists: async () => [{ id: 900, username: 'Near', tracks: 5, followers: 5 }], topTracks: async () => [track(901), track(902)] }),
+    });
+    const batch = await createWave(api, { mode: 'similar' }).next(3);
+    expect(asked[0]).toBe(55);
+    expect(asked).toContain(901);
+    expect(batch.find((c) => c.track.id === 901)?.reason).toEqual({ kind: 'relatedArtist', artist: 'artist55' });
+  });
+
+  it('волна от артиста берёт лучшее восьми его похожих артистов', async () => {
+    const api = fakeApi({
+      related: async () => [],
+      sources: sourcesApi({
+        relatedArtists: async () => Array.from({ length: 10 }, (_, i) => ({ id: 800 + i, username: 'n' + i, tracks: 3, followers: 3 })),
+        topTracks: async (id) => [track(id * 10), track(id * 10 + 1), track(id * 10 + 2), track(id * 10 + 3)],
+      }),
+    });
+    const batch = await createWave(api, { mode: 'similar', seed: { kind: 'artist', id: 5, name: 'Five' } }).next(40);
+    const near = batch.filter((c) => c.reason.kind === 'relatedArtist');
+    expect(near).toHaveLength(24);
+    expect(near.every((c) => c.reason.kind === 'relatedArtist' && c.reason.artist === 'Five')).toBe(true);
+  });
+});
+
+describe('настроение', () => {
+  it('в первую очередь идёт подходящее настроению, метки настроения ищутся на сайте', async () => {
+    const mood = (id: number, genre: string) => track(id, { genre });
+    const api = fakeApi({
+      related: async () => [mood(10, 'phonk'), mood(11, 'ambient'), mood(12, 'drill'), mood(13, 'ambient'), mood(14, 'metal'), mood(15, 'jazz')],
+    });
+    const batch = await createWave(api, { mode: 'similar', preset: 'aggressive' }).next(3);
+    expect(batch).toHaveLength(3);
+    expect(batch.every((c) => ['phonk', 'drill', 'metal'].includes(c.track.genre ?? ''))).toBe(true);
+    expect(api.calls.filter((call) => call.startsWith('genre:')).map((call) => call.split(':')[2]).sort()).toEqual(['aggressive', 'aggressive', 'phonk', 'rage']);
+  });
+
+  it('подходящего мало: после двух проходов добиваются ближайшие по настроению', async () => {
+    const api = fakeApi({ related: async () => [track(10, { genre: 'phonk' }), track(11, { genre: 'ambient' }), track(12, { genre: 'jazz' })] });
+    const batch = await createWave(api, { mode: 'similar', preset: 'aggressive' }).next(6);
+    expect(batch.length).toBeGreaterThan(1);
+    expect(batch[0].track.id).toBe(10);
+  });
+
+  it('у волны от трека пресет не действует', async () => {
+    const api = fakeApi({ related: async () => [track(10, { genre: 'ambient' }), track(11, { genre: 'jazz' }), track(12), track(13)] });
+    const batch = await createWave(api, { mode: 'similar', preset: 'aggressive', seed: { kind: 'track', track: track(77) } }).next(4);
+    expect(batch).toHaveLength(4);
+    expect(api.calls.some((call) => call.startsWith('genre:'))).toBe(false);
+  });
+});
+
+describe('«Моя музыка»', () => {
+  const entries = (n: number, from = 'Chill') => Array.from({ length: n }, (_, i) => ({ track: track(500 + i), from }));
+
+  it('по порядку: свой пул целиком впереди, без обращений за похожим, потом найденное', async () => {
+    const api = fakeApi();
+    const wave = createWave(api, { mode: 'similar', seed: { kind: 'library', title: 'Chill', own: entries(15), order: 'fixed', seeds: [track(500)] } });
+    const first = await wave.next(10);
+    expect(ids(first)).toEqual(Array.from({ length: 10 }, (_, i) => 500 + i));
+    expect(first[0].reason).toEqual({ kind: 'library', name: 'Chill' });
+    expect(api.calls.filter((call) => call.startsWith('related'))).toEqual([]);
+    const second = await wave.next(10);
+    expect(ids(second).slice(0, 5)).toEqual([510, 511, 512, 513, 514]);
+    expect(second.length).toBeGreaterThan(5);
+    expect(second[5].reason.kind).toBe('similar');
+  });
+
+  it('умное: три своих, один найденный; лайкнутое среди найденного не берётся', async () => {
+    const api = fakeApi({ related: async () => [track(3), track(60), track(61), track(62), track(63)] });
+    const wave = createWave(api, { mode: 'similar', seed: { kind: 'library', title: 'Mix', own: entries(12), order: 'smart', seeds: [track(500), track(501)] } });
+    const batch = await wave.next(8);
+    expect(batch.map((c) => (c.reason.kind === 'library' ? 'own' : 'found'))).toEqual(['own', 'own', 'own', 'found', 'own', 'own', 'own', 'found']);
+    expect(ids(batch)).not.toContain(3);
   });
 });

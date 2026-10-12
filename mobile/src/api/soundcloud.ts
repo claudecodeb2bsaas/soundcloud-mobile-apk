@@ -98,6 +98,31 @@ export function usersOf(body: unknown): UserSummary[] {
     });
 }
 
+export interface PlaylistInfo {
+    id: number;
+    title: string;
+    count: number;
+    /** Все id по порядку сайта; треки в ответе приходят полными только у первых, остальные заготовки */
+    ids: number[];
+    /** Полные треки из ответа (заготовки без названия сюда не входят) */
+    tracks: WaveTrack[];
+}
+
+export function playlistOf(body: unknown): PlaylistInfo | null {
+    const item = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+    if (!item || !isId(item.id)) return null;
+    const raw = Array.isArray(item.tracks) ? item.tracks : [];
+    const ids = [...new Set(raw.map((track: unknown) => (track as { id?: unknown } | null)?.id).filter(isId))];
+    const tracks = tracksOf(raw).filter((track) => typeof track.title === 'string');
+    return {
+        id: item.id,
+        title: typeof item.title === 'string' ? item.title.trim() : '',
+        count: typeof item.track_count === 'number' ? item.track_count : ids.length,
+        ids,
+        tracks,
+    };
+}
+
 const BATCH = 50;
 
 export function createSoundCloud(api: ApiClient) {
@@ -136,6 +161,11 @@ export function createSoundCloud(api: ApiClient) {
             return userOf((await api.call('user', { id }, {}, options)).body);
         },
 
+        /** На кого подписан аккаунт (первая страница) */
+        async followings(id: number, limit = 200, options?: CallOptions): Promise<UserSummary[]> {
+            return usersOf((await api.call('userFollowings', { id }, { limit }, options)).body);
+        },
+
         async userTracks(id: number, limit = 20, options?: CallOptions): Promise<WaveTrack[]> {
             return tracksOf((await api.call('userTracks', { id }, { limit }, options)).body);
         },
@@ -149,6 +179,40 @@ export function createSoundCloud(api: ApiClient) {
             const { body } = await api.call('playHistoryTracks', {}, { limit }, options);
             const seen = new Set<number>();
             return tracksOf(body).filter((track) => !seen.has(track.id) && !!seen.add(track.id));
+        },
+
+        async playlist(id: number, options?: CallOptions): Promise<PlaylistInfo | null> {
+            return playlistOf((await api.call('playlist', { id }, {}, options)).body);
+        },
+
+        /** Плейлисты аккаунта без альбомов (до 500) */
+        async ownPlaylists(userId: number, options?: CallOptions): Promise<PlaylistInfo[]> {
+            const lists: PlaylistInfo[] = [];
+            let query: Query | null = { limit: 50 };
+            for (let page = 0; query && page < 10; page++) {
+                const { body } = await api.call('userPlaylistsWithoutAlbums', { id: userId }, query, options);
+                for (const entry of listOf(body)) {
+                    const list = playlistOf(entry);
+                    if (list) lists.push(list);
+                }
+                query = nextQueryOf(body);
+            }
+            return lists;
+        },
+
+        /** Id сохранённых (лайкнутых) плейлистов, в том числе альбомов (до 1000) */
+        async savedPlaylistIds(options?: CallOptions): Promise<number[]> {
+            const ids: number[] = [];
+            let query: Query | null = { limit: 200 };
+            for (let page = 0; query && page < 5; page++) {
+                const { body } = await api.call('playlistLikesIds', {}, query, options);
+                for (const value of listOf(body)) {
+                    const id = typeof value === 'number' ? value : (value as { id?: unknown } | null)?.id;
+                    if (isId(id) && !ids.includes(id)) ids.push(id);
+                }
+                query = nextQueryOf(body);
+            }
+            return ids;
         },
 
         /** Поставить или снять лайк трека; без входа или с чужим user_id сайт ответит 401/403 */

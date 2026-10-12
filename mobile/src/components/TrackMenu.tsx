@@ -8,7 +8,7 @@ import { artistIdOf } from '../player/format';
 import { player } from '../player/instance';
 import { currentItem } from '../player/queue';
 import { theme } from '../theme';
-import { likes, marks, useLikes, useMarks, wave } from '../wave/instance';
+import { likes, marks, noteLiked, useLikes, useMarks, wave } from '../wave/instance';
 
 // Меню трека: одно на приложение, открывается из любого списка через openTrackMenu
 
@@ -33,7 +33,7 @@ async function playSimilar(track: WaveTrack): Promise<void> {
 
 export async function toggleLike(track: WaveTrack): Promise<void> {
   try {
-    await likes.toggle(track.id);
+    if (await likes.toggle(track.id)) noteLiked(track);
   } catch (error) {
     const status = (error as { status?: number } | null)?.status;
     Alert.alert(status === 401 || status === 403 ? 'Вход устарел, войди снова' : 'Не удалось изменить лайк');
