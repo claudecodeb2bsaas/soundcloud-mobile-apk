@@ -1,10 +1,11 @@
-import { reasonText } from '../core/waveTexts';
+import { fillText, reasonText } from '../core/waveTexts';
 import { moodList, type WaveMood } from '../core/waveMood';
-import type { WaveCandidate, WaveMode, WaveTexts, WaveTrack } from '../core/waveTypes';
+import { artwork } from '../player/format';
+import type { SeriesTrait, WaveCandidate, WaveMode, WaveTexts, WaveTrack } from '../core/waveTypes';
 import type { PlayerController } from '../player/controller';
 import { currentItem, makeItem, type QueueItem } from '../player/queue';
 import type { TextStore } from './marks';
-import type { Wave, WaveSeed } from './engine';
+import type { ForkOption, Wave, WaveSeed, WaveSignal } from './engine';
 
 // «Моя волна» как режим плеера: первая пачка заменяет очередь, дальше сессия сама дописывает пачки, пока впереди
 // осталось мало. Если человек включил своё (очередь стала не из волны), волна выходит.
@@ -23,6 +24,19 @@ export interface WaveSessionState extends WaveSettings {
     status: WaveStatus;
     /** Подпись волны от трека или артиста; пусто у обычной */
     seedLabel: string;
+    /** «Куда дальше?» после трёх быстрых пропусков подряд (П8); null, пока развилки нет */
+    fork: ForkView | null;
+    /** Подсказка о прижатом признаке серии пропусков (П7) с кнопкой «Отменить»; null, пока нечего показать */
+    notice: WaveNotice | null;
+}
+
+export interface ForkView {
+    options: Array<{ id: number; title: string; artist: string; artwork: string | null; label: string }>;
+}
+export interface WaveNotice {
+    text: string;
+    /** kind:key прижатого признака: по нему «Отменить» снимает прижим */
+    trait: string;
 }
 
 export interface WaveSession {
@@ -34,11 +48,19 @@ export interface WaveSession {
     /** Меняет настройки (хранятся) и, если волна идёт, запускает её заново */
     configure(patch: Partial<WaveSettings>): void;
     /** Трек волны пропущен рано (-1) или лайкнут (1): волна учитывает это до конца сессии. Чужие треки игнорируются */
-    feedback(track: WaveTrack, sign: 1 | -1): void;
+    feedback(track: WaveTrack, sign: 1 | -1, heard?: number): void;
+    /** Трек волны слушали от 30 секунд: серия пропусков прервана */
+    listened(track: WaveTrack): void;
+    /** Выбор варианта развилки: трек встаёт следующим и играет */
+    pickFork(id: number): void;
+    closeFork(): void;
+    /** «Отменить» у подсказки о прижатом признаке */
+    undoNotice(): void;
+    dismissNotice(): void;
 }
 
 export interface WaveSessionDeps {
-    player: Pick<PlayerController, 'getState' | 'subscribe' | 'playItems' | 'appendItems' | 'next'>;
+    player: Pick<PlayerController, 'getState' | 'subscribe' | 'playItems' | 'appendItems' | 'next' | 'removeAt' | 'move'>;
     createWave(settings: WaveSettings, seed: WaveSeed | undefined): Wave;
     texts: WaveTexts;
     settings: TextStore;
@@ -67,7 +89,7 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
     const { player, texts } = deps;
     const now = deps.now ?? (() => Date.now());
     let settings = parseSettings(deps.settings.get());
-    let state: WaveSessionState = { ...settings, status: 'idle', seedLabel: '' };
+    let state: WaveSessionState = { ...settings, status: 'idle', seedLabel: '', fork: null, notice: null };
     const listeners = new Set<() => void>();
 
     // gen растёт при каждом запуске и остановке: ответы старой волны отбрасываются
@@ -102,7 +124,81 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
         seed = undefined;
         owned = new Set();
         refilling = false;
-        if (state.status !== 'idle') set({ status: 'idle', seedLabel: '' });
+        clearTimeout(forkTimer);
+        if (state.status !== 'idle' || state.fork || state.notice) set({ status: 'idle', seedLabel: '', fork: null, notice: null });
+    }
+
+    // Развилка «Куда дальше?» живёт две минуты: без выбора варианты возвращаются в пул, музыка идёт как шла
+    let forkTimer: ReturnType<typeof setTimeout> | undefined;
+    const FORK_MS = 120000;
+
+    const forkView = (options: ForkOption[]): ForkView => ({
+        options: options.map(({ candidate, label }) => ({
+            id: candidate.track.id,
+            title: candidate.track.title ?? '',
+            artist: candidate.track.user?.username ?? '',
+            artwork: artwork(candidate.track.artwork_url),
+            label: label.kind === 'artist' ? fillText(texts.whyTasteArtist, { artist: label.name })
+                : label.kind === 'calm' ? texts.forkCalm
+                : label.kind === 'newArtist' ? texts.whyNewArtist
+                : reasonText(candidate.reason, texts),
+        })),
+    });
+
+    // П7: что именно ушло из волны, одной строкой
+    function traitText(trait: SeriesTrait): string {
+        if (trait.kind === 'lang') return trait.key === 'cyr' ? texts.traitLessCyr : texts.traitLessInst;
+        if (trait.kind === 'genre') return fillText(texts.traitLessGenre, { genre: trait.label });
+        if (trait.kind === 'marker') return fillText(texts.traitLessMarker, { marker: trait.label });
+        return texts.traitLessForeign;
+    }
+
+    // Впереди стоящее из волны возвращается в пул и берётся заново по вкусу с поправками сессии. Старое убирается из
+    // очереди, когда новое найдено: очередь не пустеет. Поставленное руками остаётся
+    async function rebuildAhead(fresh: boolean): Promise<void> {
+        const mine = gen;
+        const current = wave;
+        if (!current || refilling) return;
+        const { queue } = player.getState();
+        const ahead = queue.items.slice(queue.index + 1).filter((item) => owned.has(item.key));
+        if (!ahead.length) return;
+        const count = current.reclaim(ahead.map((item) => item.track), fresh);
+        if (!count) return;
+        refilling = true;
+        try {
+            const list = await current.next(count);
+            if (mine !== gen || !list.length) return;
+            const after = player.getState().queue;
+            const old = new Set(ahead.map((item) => item.key));
+            for (let i = after.items.length - 1; i > after.index; i--) if (old.has(after.items[i].key)) player.removeAt(i);
+            player.appendItems(itemsOf(list));
+        } catch (error) {
+            if (mine !== gen) return;
+            failedAt = now();
+            console.warn('Волна: очередь впереди не пересобрана', error);
+        } finally {
+            if (mine === gen) refilling = false;
+        }
+    }
+
+    function handle(signals: WaveSignal[]): void {
+        let rebuild: { fresh: boolean } | null = null;
+        for (const signal of signals) {
+            if (signal.kind === 'trait') set({ notice: { text: traitText(signal.trait), trait: signal.trait.kind + ':' + signal.trait.key } });
+            else if (signal.kind === 'fork') {
+                set({ fork: forkView(signal.options) });
+                clearTimeout(forkTimer);
+                forkTimer = setTimeout(closeFork, FORK_MS);
+            } else rebuild = signal;
+        }
+        if (rebuild) void rebuildAhead(rebuild.fresh);
+    }
+
+    function closeFork(): void {
+        clearTimeout(forkTimer);
+        if (!state.fork) return;
+        wave?.closeFork();
+        set({ fork: null });
     }
 
     async function refill(): Promise<void> {
@@ -151,7 +247,7 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
         drained = false;
         failedAt = -Infinity;
         const label = next ? (next.kind === 'track' ? next.track.title ?? '' : next.kind === 'artist' ? next.name : next.title) : '';
-        set({ ...settings, status: 'loading', seedLabel: label });
+        set({ ...settings, status: 'loading', seedLabel: label, fork: null, notice: null });
         let list: WaveCandidate[];
         try {
             list = await created.next(BATCH);
@@ -188,8 +284,34 @@ export function createWaveSession(deps: WaveSessionDeps): WaveSession {
         },
         start,
         stop,
-        feedback(track, sign) {
-            if (wave && state.status === 'running') wave.feedback(track, sign);
+        feedback(track, sign, heard) {
+            if (wave && state.status === 'running') handle(wave.feedback(track, sign, heard));
+        },
+        listened(track) {
+            if (wave && state.status === 'running') wave.listened(track);
+        },
+        pickFork(id) {
+            const candidate = wave?.pickFork(id);
+            clearTimeout(forkTimer);
+            set({ fork: null });
+            if (!candidate) return;
+            const [item] = itemsOf([candidate]);
+            const before = player.getState().queue;
+            // Трек встаёт следующим после играющего и сразу начинает играть
+            player.appendItems([item]);
+            player.move(before.items.length, before.index + 1);
+            player.next();
+        },
+        closeFork,
+        undoNotice() {
+            const key = state.notice?.trait;
+            set({ notice: null });
+            if (!key || !wave) return;
+            wave.releaseTrait(key);
+            void rebuildAhead(false);
+        },
+        dismissNotice() {
+            if (state.notice) set({ notice: null });
         },
         configure(patch) {
             const next = { ...settings, ...patch };

@@ -4,10 +4,11 @@ import { copyKey, copyKeys, familyKey } from '../core/trackIdentity';
 import { genreEnglish, genreKeys, genreKeysFor, parseGenres, tagShares, trackLang, trackMatchesGenre } from '../core/waveGenres';
 import { artistMoods, moodDictionary, moodScore, neighborMood, trackMood, type ArtistMoods, type MoodScores, type WaveMood } from '../core/waveMood';
 import { acceptCandidate, artistNames, freshEnough, isNewArtist, pickSpaced, shuffleInPlace, spacingGap, spacingKeys, trackArtist } from '../core/wavePicks';
-import { applyTasteReasons, sourceBias, tasteForTime, tasteOrder, tasteScore } from '../core/waveTaste';
+import { applyTasteReasons, seriesTrait, sourceBias, tasteForTime, tasteOrder, tasteScore, trackTraits } from '../core/waveTaste';
 import type { SourcesSection, ScMix } from '../core/wave/sources';
 import { interleaveMixes } from '../core/wave/sources';
-import type { TasteMaps, WaveCandidate, WaveFilter, WaveMode, WaveReason, WaveTrack } from '../core/waveTypes';
+import type { SeriesTrait, TasteMaps, TasteScore, WaveCandidate, WaveFilter, WaveMode, WaveReason, WaveTrack } from '../core/waveTypes';
+import { notePresetSkip, presetPenalty, type PresetMarkMap } from './presetMarks';
 
 // Ядро «Моей волны» для телефона. Берёт зёрна из истории и лайков (или трек, артиста, «Мою музыку», выбранные руками),
 // ищет похожее, станцию трека, подборки SoundCloud, треки похожих артистов, находки соседей по вкусу и страницы жанра
@@ -53,13 +54,42 @@ export interface WaveOptions {
     seed?: WaveSeed;
     /** «Не нравится» и скрытые артисты; читается при каждом проходе */
     excluded?(): WaveExclusions;
+    /** Отметки пресетов (ранние пропуски внутри пресета) на момент запуска волны и куда сохранять новые */
+    presetMarks?: PresetMarkMap;
+    onPresetMarks?(marks: PresetMarkMap): void;
 }
+
+/** Подпись варианта развилки: текст по ней собирает сессия */
+export type ForkLabel = { kind: 'artist'; name: string } | { kind: 'reason' } | { kind: 'calm' } | { kind: 'newArtist' };
+export interface ForkOption {
+    candidate: WaveCandidate;
+    label: ForkLabel;
+}
+
+/** Что волна просит сделать после раннего пропуска: прижатый признак серии (П7), развилка «Куда дальше?» (П8),
+ *  пересборка очереди впереди (fresh: найденное от зёрен с пропусками в пул не возвращается) */
+export type WaveSignal =
+    | { kind: 'trait'; trait: SeriesTrait }
+    | { kind: 'fork'; options: ForkOption[] }
+    | { kind: 'rebuild'; fresh: boolean };
 
 export interface Wave {
     /** До count новых треков; пустой список значит, что найти больше нечего. Вызовы идут по очереди */
     next(count: number): Promise<WaveCandidate[]>;
-    /** Ранний пропуск (-1) или лайк (1) отданного волной трека: аккаунт, теги и зерно в этой волне ниже или выше */
-    feedback(track: WaveTrack, sign: 1 | -1): void;
+    /** Ранний пропуск (-1) или лайк (1) отданного волной трека: аккаунт, теги и зерно в этой волне ниже или выше.
+     *  heard: сколько мс звучало до пропуска (быстрее 5 секунд считается за перебор). Пропуск возвращает сигналы */
+    feedback(track: WaveTrack, sign: 1 | -1, heard?: number): WaveSignal[];
+    /** Трек волны слушали от 30 секунд: серия пропусков прервана, прижатые его признаки сняты */
+    listened(track: WaveTrack): void;
+    /** Снять прижатый признак серии (кнопка «Отменить»); key это kind:key признака */
+    releaseTrait(key: string): void;
+    /** Выбор варианта развилки: возвращает его кандидата (остальные вернулись в пул) */
+    pickFork(id: number): WaveCandidate | null;
+    /** Развилку закрыли или она протухла: варианты возвращаются в пул */
+    closeFork(): void;
+    /** Отданные, но ещё не сыгранные треки возвращаются в пул (найденное) или в свою очередь (подборка);
+     *  сколько вернулось. fresh: найденное от зёрен с пропусками не возвращается */
+    reclaim(tracks: WaveTrack[], fresh?: boolean): number;
 }
 
 const SEEDS_PER_ROUND = 3;
@@ -68,6 +98,8 @@ const HISTORY_RECENT = 200;
 const SC_PER_ROUND = 10;
 const NEIGHBORS_PER_ROUND = 4;
 const MOOD_FIT = 0.5;
+/** Пропуск быстрее этого считается перебором: три таких подряд открывают развилку */
+const FAST_SKIP_MS = 5000;
 
 const title = (track: WaveTrack): string => (track.title ?? '').trim() || '…';
 const EMPTY_TASTE: TasteMaps = {
@@ -111,6 +143,17 @@ export function createWave(api: WaveApi, options: WaveOptions): Wave {
     const sessionArtists = new Map<number, number>();
     const sessionTags = new Map<string, number>();
     const sessionSeeds = new Map<number, number>();
+    // Ранние пропуски подряд: серия (П7) прижимает общий признак до конца волны, три быстрых подряд открывают развилку (П8)
+    let skipRun = 0;
+    let skipSeries: WaveTrack[] = [];
+    let fastRun = 0;
+    const sessionTraits = new Map<string, SeriesTrait>();
+    let fork: ForkOption[] | null = null;
+    let presetMarks: PresetMarkMap = options.presetMarks ?? {};
+    // Рано пропущенные копии: в этой волне больше не встают. Взятое из найденного (а не из своей подборки) пересборка
+    // впереди возвращает в пул
+    const skippedKeys = new Set<string>();
+    const pooled = new WeakSet<WaveCandidate>();
     let ownAdded = false;
     let fallbackDone = false;
     let artistNeighborsDone = false;
@@ -154,7 +197,7 @@ export function createWave(api: WaveApi, options: WaveOptions): Wave {
         // Подмешанное к своей музыке и похожее после неё новое для библиотеки: лайков там нет
         if (seed?.kind === 'library') for (const id of p.liked) excludedTracks.add(id);
         return {
-            mode: seed?.kind === 'library' ? 'similar' : mode, taken, recent, heard: recent, liked: p.liked, skipped: new Set(),
+            mode: seed?.kind === 'library' ? 'similar' : mode, taken, recent, heard: recent, liked: p.liked, skipped: skippedKeys,
             excludedTracks, excludedArtists: new Set(marks?.artists), excludedFamilies: new Map(),
         };
     }
@@ -223,8 +266,13 @@ export function createWave(api: WaveApi, options: WaveOptions): Wave {
         let delta = sessionArtists.get(trackArtist(track)) ?? 0;
         for (const [key, share] of tagShares(track.genre, track.tag_list, [track.user?.username])) delta += share * (sessionTags.get(key) ?? 0);
         delta += sourceShift.get(candidate.trace?.origin ?? candidate.reason.kind) ?? 0;
+        if (sessionTraits.size) {
+            const traits = trackTraits(track);
+            for (const trait of sessionTraits.values()) if (traits.some((item) => item.kind === trait.kind && item.key === trait.key)) delta -= 1;
+        }
         const from = candidate.trace?.seed ?? 0;
-        return from ? delta + (sessionSeeds.get(from) ?? 0) : delta;
+        // Пресет действует только у обычной волны; свой вкус в нём: рано пропущенное внутри пресета ниже
+        return (from ? delta + (sessionSeeds.get(from) ?? 0) : delta) - (preset ? presetPenalty(presetMarks[preset], track) : 0);
     }
 
     function rerankPool(): void {
@@ -602,6 +650,7 @@ export function createWave(api: WaveApi, options: WaveOptions): Wave {
             if (!fromOwn) {
                 pool = pool.filter((entry) => entry !== item);
                 pickedInGeneration++;
+                pooled.add(item);
             }
             picked.push(item);
             recentKeys.push(spacingKeys(item.track));
@@ -611,6 +660,7 @@ export function createWave(api: WaveApi, options: WaveOptions): Wave {
         while (picked.length < count && preset && moodReserve.length) {
             const next = moodReserve.shift();
             if (!next) break;
+            pooled.add(next.candidate);
             picked.push(next.candidate);
             recentKeys.push(spacingKeys(next.candidate.track));
             if (recentKeys.length > 6) recentKeys.shift();
@@ -639,17 +689,158 @@ export function createWave(api: WaveApi, options: WaveOptions): Wave {
             queue = run;
             return run;
         },
-        feedback(track, sign) {
+        feedback(track, sign, heard = 30000) {
             const candidate = given.get(track.id);
-            if (!candidate) return;
-            const add = <K>(map: Map<K, number>, key: K, value: number): void => { map.set(key, (map.get(key) ?? 0) + sign * value); };
-            const artist = trackArtist(track);
-            if (artist) add(sessionArtists, artist, 1);
-            for (const [key, share] of tagShares(track.genre, track.tag_list, [track.user?.username])) add(sessionTags, key, 0.5 * share);
-            const from = candidate.trace?.seed ?? 0;
-            if (from) add(sessionSeeds, from, 0.5);
-            // Впереди стоящее в пуле переставляется по новым поправкам
+            if (!candidate) return [];
+            adjustSession(candidate, sign);
+            if (sign === 1) {
+                // Впереди стоящее в пуле переставляется по новым поправкам
+                rerankPool();
+                return [];
+            }
+            // Ранний пропуск: копии этой версии в волне больше не встают, остальные треки аккаунта играют
+            for (const key of copyKeys(track)) skippedKeys.add(key);
+            const kept = (item: WaveCandidate): boolean => item.track.id === track.id || !skippedKeys.has(copyKey(item.track));
+            pool = pool.filter(kept);
+            for (let i = own.length - 1; i >= 0; i--) if (!kept(own[i])) own.splice(i, 1);
+            if (preset) {
+                presetMarks = notePresetSkip(presetMarks, preset, track);
+                options.onPresetMarks?.(presetMarks);
+            }
+            skipRun++;
+            skipSeries.push(track);
+            fastRun = heard < FAST_SKIP_MS ? fastRun + 1 : 0;
+            const signals: WaveSignal[] = [];
+            if (skipRun >= 2) {
+                const trait = pressTrait();
+                if (trait) signals.push({ kind: 'trait', trait });
+            }
+            let fresh = false;
+            if (skipRun >= 3) {
+                // Три быстрых пропуска подряд: человек ищет другое, развилка вместо пересборки вслепую (П8);
+                // у подборки по порядку выбирать нечего. Иначе новые зёрна без тех, от которых шли пропуски
+                const scanning = fastRun >= 3 && !(seed?.kind === 'library' && seed.order === 'fixed');
+                skipRun = 0;
+                skipSeries = [];
+                fastRun = 0;
+                const variants = scanning ? openFork() : null;
+                if (variants) signals.push({ kind: 'fork', options: variants });
+                else fresh = true;
+            }
+            rerankPool();
+            signals.push({ kind: 'rebuild', fresh });
+            return signals;
+        },
+        listened(track) {
+            skipRun = 0;
+            skipSeries = [];
+            fastRun = 0;
+            if (!sessionTraits.size) return;
+            for (const trait of trackTraits(track)) sessionTraits.delete(trait.kind + ':' + trait.key);
             rerankPool();
         },
+        releaseTrait(key) {
+            if (sessionTraits.delete(key)) rerankPool();
+        },
+        pickFork(id) {
+            const option = fork?.find((entry) => entry.candidate.track.id === id);
+            if (!fork || !option) return null;
+            pool.push(...fork.filter((entry) => entry !== option).map((entry) => entry.candidate));
+            fork = null;
+            given.set(id, option.candidate);
+            pooled.add(option.candidate);
+            // Выбор поднимает направление в сессии, как лайк
+            adjustSession(option.candidate, 1);
+            rerankPool();
+            return option.candidate;
+        },
+        closeFork() {
+            if (!fork) return;
+            pool.push(...fork.map((entry) => entry.candidate));
+            fork = null;
+            rerankPool();
+        },
+        reclaim(tracks, fresh = false) {
+            const back: WaveCandidate[] = [];
+            const mine: WaveCandidate[] = [];
+            for (const track of tracks) {
+                const candidate = given.get(track.id);
+                if (!candidate) continue;
+                (pooled.has(candidate) ? back : mine).push(candidate);
+            }
+            pool.push(...(fresh ? back.filter(unskippedSeed) : back));
+            own.unshift(...mine);
+            rerankPool();
+            // Окно разнесения считается заново от новой части очереди
+            recentKeys.length = 0;
+            return back.length + mine.length;
+        },
     };
+
+    // Ранний пропуск (-1) или лайк (1): аккаунт на единицу, теги на половину доли, зерно на половину
+    function adjustSession(candidate: WaveCandidate, sign: 1 | -1): void {
+        const track = candidate.track;
+        const add = <K>(map: Map<K, number>, key: K, value: number): void => { map.set(key, (map.get(key) ?? 0) + sign * value); };
+        const artist = trackArtist(track);
+        if (artist) add(sessionArtists, artist, 1);
+        for (const [key, share] of tagShares(track.genre, track.tag_list, [track.user?.username])) add(sessionTags, key, 0.5 * share);
+        const from = candidate.trace?.seed ?? 0;
+        if (from) add(sessionSeeds, from, 0.5);
+    }
+
+    // Найденное от зёрна, по которому пропускали, в «свежую» пересборку не возвращается
+    function unskippedSeed(candidate: WaveCandidate): boolean {
+        return (sessionSeeds.get(candidate.trace?.seed ?? 0) ?? 0) >= 0;
+    }
+
+    // П7: на втором и третьем раннем пропуске подряд общий признак всей серии (пометка версии, язык, главный жанр, чужой
+    // канал) прижимается до конца волны. Признаки зерна и выбранный жанр не прижимаются: в этой волне они ничего не различают
+    function pressTrait(): SeriesTrait | null {
+        const skip = [...sessionTraits.keys()];
+        if (seed?.kind === 'track') for (const trait of trackTraits(seed.track)) skip.push(trait.kind + ':' + trait.key);
+        if (!seed) for (const key of keys) skip.push('genre:' + key);
+        const trait = seriesTrait(skipSeries, skip);
+        if (!trait) return null;
+        sessionTraits.set(trait.kind + ':' + trait.key, trait);
+        return trait;
+    }
+
+    // П8: варианты разных направлений из найденного: любимый артист, похожий артист, подборка SoundCloud, спокойнее,
+    // новый артист, соседи по вкусу. На направление лучший по вкусу с поправкой сессии, артисты не повторяются, до пяти;
+    // меньше четырёх развилку не открывают. На время развилки варианты уходят из пула, чтобы не встать в очередь
+    function openFork(): ForkOption[] | null {
+        const current = taste ?? EMPTY_TASTE;
+        const originOf = (candidate: WaveCandidate): string => candidate.trace?.origin ?? candidate.reason.kind;
+        const artists = new Set<number>();
+        const found: ForkOption[] = [];
+        const direction = (test: (candidate: WaveCandidate, score: TasteScore) => boolean, label: (candidate: WaveCandidate, score: TasteScore) => ForkLabel): void => {
+            if (found.length >= 5) return;
+            let best: { candidate: WaveCandidate; score: TasteScore; value: number } | null = null;
+            for (const candidate of pool) {
+                if (artists.has(trackArtist(candidate.track))) continue;
+                const score = tasteScore(candidate.track, current);
+                if (!test(candidate, score)) continue;
+                const value = score.score + sessionScore(candidate);
+                if (!best || value > best.value) best = { candidate, score, value };
+            }
+            if (!best) return;
+            artists.add(trackArtist(best.candidate.track));
+            found.push({ candidate: best.candidate, label: label(best.candidate, best.score) });
+        };
+        const reason = (): ForkLabel => ({ kind: 'reason' });
+        direction((_, score) => score.artist >= 1 || score.creditBest >= 1, (candidate, score) => {
+            const name = score.creditBest > score.artist && score.creditName ? score.creditName : (candidate.track.user?.username ?? '').trim();
+            return name ? { kind: 'artist', name } : reason();
+        });
+        direction((candidate) => originOf(candidate) === 'relatedArtist', reason);
+        direction((candidate) => originOf(candidate) === 'scMix', reason);
+        direction((candidate) => moodOf(candidate.track).calm >= 0.5, () => ({ kind: 'calm' }));
+        direction((_, score) => !score.known, () => ({ kind: 'newArtist' }));
+        direction((candidate) => originOf(candidate) === 'neighbors', reason);
+        if (found.length < 4) return null;
+        const chosen = new Set(found.map((entry) => entry.candidate));
+        pool = pool.filter((candidate) => !chosen.has(candidate));
+        fork = found;
+        return found;
+    }
 }

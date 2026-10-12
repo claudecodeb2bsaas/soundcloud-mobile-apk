@@ -1,6 +1,6 @@
 import type { SoundCloud } from '../api/soundcloud';
 import type { TasteLibrary, TasteUpload } from '../core/historyTypes';
-import { buildTaste } from '../core/tasteModel';
+import { buildTaste, type TasteOverrides, type TasteView } from '../core/tasteModel';
 import { trackCredits } from '../core/trackIdentity';
 import { trackArtist } from '../core/wavePicks';
 import { tasteMaps } from '../core/waveTaste';
@@ -18,7 +18,15 @@ const SOURCES_DAYS = 14;
 export interface TasteDeps {
     history: Pick<History, 'tastePlays' | 'marks' | 'waveOrigins'>;
     library(user: number): Promise<TasteLibrary | null>;
+    /** «Убрать из вкуса»: аккаунты и теги, которые модель не учитывает */
+    overrides?: TasteOverridesStore;
     now?(): number;
+}
+
+export interface TasteOverridesStore {
+    get(user: number): TasteOverrides;
+    /** Убрать или вернуть; false, если ввод неверный */
+    set(user: number, kind: 'artist' | 'tag', key: number | string, removed: boolean): boolean;
 }
 
 export interface Taste {
@@ -26,6 +34,10 @@ export interface Taste {
     maps(user: number): Promise<TasteMaps | null>;
     /** Профиль устарел: после лайка, отметки или новой порции прослушиваний */
     invalidate(user?: number): void;
+    /** Вкус для экрана «Мой вкус»: считается заново при каждом открытии, с убранным */
+    view(user: number): Promise<TasteView>;
+    /** Убрать артиста или тег из вкуса или вернуть; профиль пересчитается при следующем запросе */
+    setRemoved(user: number, kind: 'artist' | 'tag', key: number | string, removed: boolean): boolean;
 }
 
 export function createTaste(deps: TasteDeps): Taste {
@@ -33,7 +45,7 @@ export function createTaste(deps: TasteDeps): Taste {
     const cache = new Map<number, { at: number; maps: TasteMaps | null }>();
     const running = new Map<number, Promise<TasteMaps | null>>();
 
-    async function compute(user: number): Promise<TasteMaps | null> {
+    async function compute(user: number): Promise<{ maps: TasteMaps | null; view: TasteView }> {
         const at = now();
         const [plays, marks, sources, library] = await Promise.all([
             deps.history.tastePlays(user, at - HORIZON_DAYS * DAY),
@@ -46,8 +58,8 @@ export function createTaste(deps: TasteDeps): Taste {
                 return null;
             }),
         ]);
-        const { profile } = buildTaste(plays, marks, { artists: [], tags: [] }, at, library, sources);
-        return tasteMaps(profile);
+        const { profile, view } = buildTaste(plays, marks, deps.overrides?.get(user) ?? { artists: [], tags: [] }, at, library, sources);
+        return { maps: tasteMaps(profile), view };
     }
 
     return {
@@ -57,7 +69,7 @@ export function createTaste(deps: TasteDeps): Taste {
             let job = running.get(user);
             if (!job) {
                 job = compute(user)
-                    .then((maps) => {
+                    .then(({ maps }) => {
                         cache.set(user, { at: now(), maps });
                         return maps;
                     })
@@ -69,6 +81,16 @@ export function createTaste(deps: TasteDeps): Taste {
         invalidate(user) {
             if (user === undefined) cache.clear();
             else cache.delete(user);
+        },
+        async view(user) {
+            const { maps, view } = await compute(user);
+            cache.set(user, { at: now(), maps });
+            return view;
+        },
+        setRemoved(user, kind, key, removed) {
+            if (!deps.overrides?.set(user, kind, key, removed)) return false;
+            cache.delete(user);
+            return true;
         },
     };
 }

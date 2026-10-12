@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { TrackMenuHost } from '../components/TrackMenu';
+import { WaveOverlay } from '../components/WaveOverlay';
 import { auth } from '../auth/instance';
 import { player } from '../player/instance';
 import { theme } from '../theme';
@@ -23,6 +24,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.bg } }}>
         <Stack.Screen name="player" options={{ presentation: 'modal' }} />
       </Stack>
+      <WaveOverlay />
       <MiniPlayer />
       <TrackMenuHost />
     </View>

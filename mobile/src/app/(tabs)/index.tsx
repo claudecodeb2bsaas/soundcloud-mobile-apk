@@ -11,7 +11,7 @@ import { theme } from '../../theme';
 import { useLoad } from '../../ui/useLoad';
 import { picks, usePicks, useWave, wave } from '../../wave/instance';
 
-/** Набор из меню трека: показывается, пока в нём что-то есть */
+/** РќР°Р±РѕСЂ РёР· РјРµРЅСЋ С‚СЂРµРєР°: РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ, РїРѕРєР° РІ РЅС‘Рј С‡С‚Рѕ-С‚Рѕ РµСЃС‚СЊ */
 function PicksBar() {
   const list = usePicks();
   if (!list.length) return null;
@@ -19,7 +19,7 @@ function PicksBar() {
     <View style={styles.picks}>
       <Text style={styles.picksText}>{WAVE_TEXTS.ru.pickStart}: {list.length}</Text>
       <Pressable style={styles.picksGo} onPress={() => { const seed = picks.take(); if (seed) void wave.start(seed); }}>
-        <Text style={styles.waveText}>Включить</Text>
+        <Text style={styles.waveText}>Р’РєР»СЋС‡РёС‚СЊ</Text>
       </Pressable>
       <Pressable onPress={() => picks.clear()} hitSlop={12}>
         <Text style={styles.link}>{WAVE_TEXTS.ru.pickClear}</Text>

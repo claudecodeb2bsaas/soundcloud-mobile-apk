@@ -93,7 +93,7 @@ function History() {
   );
 }
 
-/** Свои и сохранённые плейлисты (тот же список, что в «Моей музыке») */
+/** РЎРІРѕРё Рё СЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ РїР»РµР№Р»РёСЃС‚С‹ (С‚РѕС‚ Р¶Рµ СЃРїРёСЃРѕРє, С‡С‚Рѕ РІ В«РњРѕРµР№ РјСѓР·С‹РєРµВ») */
 function Playlists() {
   const { data, error, reload } = useLoad(async () => (await library.sources()).filter((source) => source.key.startsWith('playlist:')), []);
   return (
@@ -101,11 +101,11 @@ function Playlists() {
       <FlatList
         data={data ?? []}
         keyExtractor={(source) => source.key}
-        ListEmptyComponent={<Text style={styles.muted}>Плейлистов пока нет</Text>}
+        ListEmptyComponent={<Text style={styles.muted}>РџР»РµР№Р»РёСЃС‚РѕРІ РїРѕРєР° РЅРµС‚</Text>}
         renderItem={({ item }) => (
           <Pressable style={styles.list} onPress={() => router.push(`/playlist/${item.key.slice('playlist:'.length)}`)}>
             <Text style={styles.listTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.listCount}>{item.count} треков</Text>
+            <Text style={styles.listCount}>{item.count} С‚СЂРµРєРѕРІ</Text>
           </Pressable>
         )}
       />
@@ -121,7 +121,7 @@ export default function Library() {
       <View style={styles.tabs}>
         {(['likes', 'playlists', 'history'] as const).map((id) => (
           <Pressable key={id} onPress={() => setTab(id)} style={[styles.tab, tab === id && styles.tabOn]}>
-            <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>{id === 'likes' ? 'Р›Р°Р№РєРё' : 'РСЃС‚РѕСЂРёСЏ'}</Text>
+            <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>{id === 'likes' ? 'Р›Р°Р№РєРё' : id === 'playlists' ? 'РџР»РµР№Р»РёСЃС‚С‹' : 'РСЃС‚РѕСЂРёСЏ'}</Text>
           </Pressable>
         ))}
       </View>

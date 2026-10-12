@@ -5,6 +5,7 @@ import type { Query } from '../api/client';
 import type { EndpointName, PathParams } from '../api/endpoints';
 import { playlistOf, tracksOf } from '../api/soundcloud';
 import { auth } from '../auth/instance';
+import { COUNTED_MS } from '../core/historyTypes';
 import { installSources } from '../core/wave/sources';
 import { WAVE_TEXTS } from '../core/waveTexts';
 import type { WaveTrack } from '../core/waveTypes';
@@ -16,10 +17,12 @@ import { createLibrary, type LibraryView } from './library';
 import { createLikes } from './likes';
 import { createMarks } from './marks';
 import { createPicks } from './picks';
+import { parsePresetMarks } from './presetMarks';
 import { createRadar } from './radar';
 import { createShelf, shelfInputsOf } from './shelf';
 import { createWaveSession, type WaveSessionState } from './session';
 import { createTaste, tasteLibraryOf } from './taste';
+import { createTasteOverrides } from './tasteOverrides';
 import { createTracker } from './tracker';
 
 // Один набор на приложение: история в SQLite, вкус, отметки, лайки, волна, «Моя музыка», запись прослушиваний
@@ -40,6 +43,7 @@ export const history = createHistory(expoDb);
 export const taste = createTaste({
     history,
     library: (user) => tasteLibraryOf(auth.sc, user),
+    overrides: createTasteOverrides(kv('wave.taste-overrides.v1')),
 });
 
 export const marks = createMarks(kv('wave.marks.v1'), (change) => {
@@ -102,12 +106,26 @@ const excluded = () => {
     return { tracks: new Set(Object.keys(data.tracks).map(Number)), artists: new Set(Object.keys(data.artists).map(Number)) };
 };
 
+// Отметки пресетов: ранние пропуски внутри настроения, переживают перезапуск
+const moods = kv('wave.moods.v1');
+let presetMarks = parsePresetMarks(moods.get());
+
 export const wave = createWaveSession({
     player,
     texts: WAVE_TEXTS.ru,
     settings: kv('wave.settings.v1'),
     createWave: (settings, seed) =>
-        createWave(api, { mode: settings.mode, genre: settings.genre, preset: settings.preset || null, seed, excluded }),
+        createWave(api, {
+            mode: settings.mode, genre: settings.genre, preset: settings.preset || null, seed, excluded, presetMarks,
+            onPresetMarks: (next) => {
+                presetMarks = next;
+                try {
+                    moods.set(JSON.stringify(next));
+                } catch (error) {
+                    console.warn('Волна: отметка пресета не сохранена', error);
+                }
+            },
+        }),
 });
 
 export const library = createLibrary({
@@ -174,7 +192,10 @@ const tracker = createTracker({
     user: userId,
     record: (user, play) => history.add(user, play),
     onPlay: (play, item) => {
-        if (item.meta?.source.startsWith('wave:') && play.end === 'skip' && play.endedBy === 'user' && play.heard < 30000) wave.feedback(item.track, -1);
+        if (!item.meta?.source.startsWith('wave:')) return;
+        // Ранний пропуск человеком учит волну (признак серии, развилка, пресет); от 30 секунд серия пропусков прервана
+        if (play.end === 'skip' && play.endedBy === 'user' && play.heard < COUNTED_MS) wave.feedback(item.track, -1, play.heard);
+        else if (play.heard >= COUNTED_MS) wave.listened(item.track);
     },
 });
 AppState.addEventListener('change', (next) => { if (next !== 'active') tracker.flush(); });

@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -81,6 +82,10 @@ function WaveScreen() {
       ) : null}
       {state.status === 'empty' || state.status === 'error' ? <Text style={styles.warn}>{MESSAGES[state.status]}</Text> : null}
 
+      <Pressable onPress={() => router.push('/taste')}>
+        <Text style={styles.link}>Мой вкус: что волна ставит чаще, убрать из вкуса</Text>
+      </Pressable>
+
       <MyMusic />
     </ScrollView>
   );
@@ -114,4 +119,5 @@ const styles = StyleSheet.create({
   mainText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   status: { color: theme.text, fontSize: 14, textAlign: 'center' },
   warn: { color: '#ffb454', fontSize: 14, textAlign: 'center' },
+  link: { color: theme.accent, fontSize: 14, marginTop: 8 },
 });

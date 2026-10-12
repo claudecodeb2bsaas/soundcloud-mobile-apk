@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WaveCandidate, WaveTrack } from '../core/waveTypes';
 import { WAVE_TEXTS } from '../core/waveTexts';
-import { currentItem, emptyQueue, replaceQueue, type QueueItem, type QueueState } from '../player/queue';
-import type { Wave } from './engine';
+import { currentItem, emptyQueue, moveItem, removeAt, replaceQueue, type QueueItem, type QueueState } from '../player/queue';
+import type { Wave, WaveSignal } from './engine';
 import { createWaveSession, parseSettings, type WaveSessionDeps } from './session';
 
 const track = (id: number): WaveTrack => ({ id, kind: 'track', title: 'T' + id, duration: 200000, user: { username: 'A' } });
@@ -20,7 +20,9 @@ function fakePlayer() {
     subscribe: (l: () => void) => (listeners.add(l), () => listeners.delete(l)),
     playItems(items: QueueItem[], index = 0) { queue = replaceQueue(queue, items, index); ended = false; emit(); },
     appendItems(items: QueueItem[]) { queue = { ...queue, items: [...queue.items, ...items] }; emit(); },
-    next() { this.nexted++; },
+    next() { this.nexted++; queue = { ...queue, index: queue.index + 1 }; emit(); },
+    removeAt(index: number) { queue = removeAt(queue, index).state; emit(); },
+    move(from: number, to: number) { queue = moveItem(queue, from, to); emit(); },
     goTo(index: number) { queue = { ...queue, index }; emit(); },
     finish() { ended = true; },
   };
@@ -29,10 +31,11 @@ function fakePlayer() {
 const FIRST = [1, 2, 3, 4, 5, 6];
 
 /** fail: любой запрос отказывает; failFrom: отказывают запросы начиная с этого номера (с нуля) */
-function setup(batches: number[][], options: { fail?: boolean; failFrom?: number } = {}) {
+function setup(batches: number[][], options: { fail?: boolean; failFrom?: number; signals?: WaveSignal[] } = {}) {
   const player = fakePlayer();
   const requested: number[] = [];
   const feedback: string[] = [];
+  const calls: string[] = [];
   const created: Array<{ mode: string; genre: string; seed: unknown }> = [];
   const stored: { value: string | null } = { value: null };
   let time = 0;
@@ -50,13 +53,18 @@ function setup(batches: number[][], options: { fail?: boolean; failFrom?: number
           if (options.fail || (options.failFrom !== undefined && requested.length > options.failFrom)) throw new Error('net');
           return (queue.shift() ?? []).map(candidate);
         },
-        feedback: (t, sign) => { feedback.push(`${t.id}:${sign}`); },
+        feedback: (t, sign, heard) => { feedback.push(`${t.id}:${sign}` + (heard === undefined ? '' : ':' + heard)); return options.signals ?? []; },
+        listened: (t) => { calls.push('listened:' + t.id); },
+        releaseTrait: (key) => { calls.push('release:' + key); },
+        pickFork: (id) => { calls.push('pick:' + id); return id === 99 ? candidate(99) : null; },
+        closeFork: () => { calls.push('closeFork'); },
+        reclaim: (tracks, fresh) => { calls.push('reclaim:' + tracks.map((t) => t.id).join(',') + (fresh ? ':fresh' : '')); return tracks.length; },
       };
       return wave;
     },
   };
   const session = createWaveSession(deps);
-  return { session, player, requested, feedback, created, stored, advance: (ms: number) => { time += ms; } };
+  return { session, player, requested, feedback, calls, created, stored, advance: (ms: number) => { time += ms; } };
 }
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -199,5 +207,80 @@ describe('сессия волны', () => {
     await ctx.session.start({ kind: 'library', title: 'Лайки и Chill', own: [], order: 'fixed', seeds: [] });
     expect(ctx.session.getState().seedLabel).toBe('Лайки и Chill');
     expect(ctx.player.queue.items[0].meta?.source).toBe('wave:library');
+  });
+
+  it('feedback передаёт, сколько звучало, а listened доходит до волны', async () => {
+    const ctx = setup([FIRST]);
+    await ctx.session.start();
+    ctx.session.feedback(track(2), -1, 4000);
+    ctx.session.listened(track(3));
+    expect(ctx.feedback).toEqual(['2:-1:4000']);
+    expect(ctx.calls).toEqual(['listened:3']);
+  });
+
+  it('П7: признак серии показывается подсказкой, «Отменить» снимает его и пересобирает очередь', async () => {
+    const signals: WaveSignal[] = [
+      { kind: 'trait', trait: { kind: 'lang', key: 'cyr', label: 'cyr' } },
+      { kind: 'rebuild', fresh: false },
+    ];
+    const ctx = setup([FIRST, [7, 8, 9]], { signals });
+    await ctx.session.start();
+    ctx.session.feedback(track(2), -1, 20000);
+    expect(ctx.session.getState().notice).toEqual({ text: WAVE_TEXTS.ru.traitLessCyr, trait: 'lang:cyr' });
+    await tick();
+    ctx.session.undoNotice();
+    expect(ctx.session.getState().notice).toBeNull();
+    expect(ctx.calls).toContain('release:lang:cyr');
+    ctx.session.dismissNotice();
+    expect(ctx.session.getState().notice).toBeNull();
+  });
+
+  it('пересборка: впереди стоящее волны возвращается волне, очередь заменяется новым, играющее и своё остаются', async () => {
+    const ctx = setup([FIRST, [7, 8, 9]], { signals: [{ kind: 'rebuild', fresh: true }] });
+    await ctx.session.start();
+    ctx.player.queue.items.splice(3, 0, { key: 'own', track: track(50) });
+    ctx.session.feedback(track(1), -1, 20000);
+    await tick();
+    expect(ctx.calls).toEqual(['reclaim:2,3,4,5,6:fresh']);
+    expect(ctx.requested.at(-1)).toBe(5);
+    expect(ids(ctx.player.queue)).toEqual([1, 50, 7, 8, 9]);
+  });
+
+  it('П8: развилка с подписями, выбор ставит трек следующим и играет его, закрытие возвращает варианты', async () => {
+    const options = [
+      { candidate: candidate(99), label: { kind: 'newArtist' as const } },
+      { candidate: candidate(98), label: { kind: 'calm' as const } },
+      { candidate: candidate(97), label: { kind: 'artist' as const, name: 'Ann' } },
+      { candidate: candidate(96), label: { kind: 'reason' as const } },
+    ];
+    const ctx = setup([FIRST], { signals: [{ kind: 'fork', options }, { kind: 'rebuild', fresh: false }] });
+    await ctx.session.start();
+    ctx.session.feedback(track(2), -1, 1000);
+    const fork = ctx.session.getState().fork;
+    expect(fork?.options.map((option) => option.label)).toEqual([
+      WAVE_TEXTS.ru.whyNewArtist, WAVE_TEXTS.ru.forkCalm, 'Ты любишь Ann', WAVE_TEXTS.ru.whySimilar.replace('{seed}', 'S'),
+    ]);
+    ctx.session.pickFork(99);
+    expect(ctx.session.getState().fork).toBeNull();
+    expect(ctx.calls).toContain('pick:99');
+    expect(ctx.player.nexted).toBe(1);
+    expect(ctx.player.queue.items[ctx.player.queue.index].track.id).toBe(99);
+    expect(ctx.player.queue.items[ctx.player.queue.index].meta?.source).toBe('wave:similar');
+
+    ctx.session.feedback(track(3), -1, 1000);
+    expect(ctx.session.getState().fork).not.toBeNull();
+    ctx.session.closeFork();
+    expect(ctx.session.getState().fork).toBeNull();
+    expect(ctx.calls).toContain('closeFork');
+  });
+
+  it('остановка волны убирает развилку и подсказку', async () => {
+    const ctx = setup([FIRST], { signals: [{ kind: 'trait', trait: { kind: 'lang', key: 'inst', label: 'inst' } }] });
+    await ctx.session.start();
+    ctx.session.feedback(track(2), -1, 20000);
+    expect(ctx.session.getState().notice?.text).toBe(WAVE_TEXTS.ru.traitLessInst);
+    ctx.session.stop();
+    expect(ctx.session.getState().notice).toBeNull();
+    expect(ctx.session.getState().fork).toBeNull();
   });
 });

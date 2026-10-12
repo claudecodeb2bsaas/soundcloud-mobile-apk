@@ -130,23 +130,23 @@ describe('createSoundCloud', () => {
   });
 });
 
-describe('÷àğòû, ïëåéëèñòû è ëàéêè öåëèêîì', () => {
-  it('chartsOf: ïîäáîğêè ñòğàí ñ ïëåéëèñòàìè, áåç ïóñòûõ', () => {
+describe('Ñ‡Ğ°Ñ€Ñ‚Ñ‹, Ğ¿Ğ»ĞµĞ¹Ğ»Ğ¸ÑÑ‚Ñ‹ Ğ¸ Ğ»Ğ°Ğ¹ĞºĞ¸ Ñ†ĞµĞ»Ğ¸ĞºĞ¾Ğ¼', () => {
+  it('chartsOf: Ğ¿Ğ¾Ğ´Ğ±Ğ¾Ñ€ĞºĞ¸ ÑÑ‚Ñ€Ğ°Ğ½ Ñ Ğ¿Ğ»ĞµĞ¹Ğ»Ğ¸ÑÑ‚Ğ°Ğ¼Ğ¸, Ğ±ĞµĞ· Ğ¿ÑƒÑÑ‚Ñ‹Ñ…', () => {
     const body = { collection: [
       { title: 'Music Charts US', items: { collection: [{ id: 1, kind: 'playlist', title: 'All music genres', track_count: 50, artwork_url: 'a-large.jpg', user: { username: 'Music Charts' } }, { kind: 'playlist' }] } },
-      { title: 'Ïóñòî', items: { collection: [] } },
+      { title: 'ĞŸÑƒÑÑ‚Ğ¾', items: { collection: [] } },
     ] };
     expect(chartsOf(body)).toEqual([{ title: 'Music Charts US', lists: [{ id: 1, title: 'All music genres', count: 50, ids: [], tracks: [], artwork: 'a-large.jpg', owner: 'Music Charts' }] }]);
     expect(chartsOf(null)).toEqual([]);
   });
 
-  it('charts èä¸ò â chartSelections', async () => {
+  it('charts Ğ¸Ğ´Ñ‘Ñ‚ Ğ² chartSelections', async () => {
     const { api, calls } = fakeApi(() => ({ collection: [] }));
     expect(await createSoundCloud(api).charts()).toEqual([]);
     expect(calls[0].name).toBe('chartSelections');
   });
 
-  it('playlistTracks äîáèğàåò çàãîòîâêè ïà÷êîé è õğàíèò ïîğÿäîê ñàéòà', async () => {
+  it('playlistTracks Ğ´Ğ¾Ğ±Ğ¸Ñ€Ğ°ĞµÑ‚ Ğ·Ğ°Ğ³Ğ¾Ñ‚Ğ¾Ğ²ĞºĞ¸ Ğ¿Ğ°Ñ‡ĞºĞ¾Ğ¹ Ğ¸ Ñ…Ñ€Ğ°Ğ½Ğ¸Ñ‚ Ğ¿Ğ¾Ñ€ÑĞ´Ğ¾Ğº ÑĞ°Ğ¹Ñ‚Ğ°', async () => {
     const { api, calls } = fakeApi((name, _path, query) => {
       if (name === 'playlist') return { id: 9, title: 'Mix', track_count: 3, tracks: [{ id: 3, kind: 'track', title: 'C' }, { id: 1, kind: 'track' }, { id: 2, kind: 'track' }] };
       return (String((query as { ids: string }).ids).split(',').map((id) => ({ id: Number(id), kind: 'track', title: 'T' + id })));
@@ -156,7 +156,7 @@ describe('÷àğòû, ïëåéëèñòû è ëàéêè öåëèêîì', () => {
     expect(calls.filter((call) => call.name === 'trackBatch').map((call) => (call.query as { ids: string }).ids)).toEqual(['1,2']);
   });
 
-  it('likedTracks èä¸ò ïî ñòğàíèöàì id äî ëèìèòà è áåğ¸ò ïîëíûå òğåêè', async () => {
+  it('likedTracks Ğ¸Ğ´Ñ‘Ñ‚ Ğ¿Ğ¾ ÑÑ‚Ñ€Ğ°Ğ½Ğ¸Ñ†Ğ°Ğ¼ id Ğ´Ğ¾ Ğ»Ğ¸Ğ¼Ğ¸Ñ‚Ğ° Ğ¸ Ğ±ĞµÑ€Ñ‘Ñ‚ Ğ¿Ğ¾Ğ»Ğ½Ñ‹Ğµ Ñ‚Ñ€ĞµĞºĞ¸', async () => {
     const { api, calls } = fakeApi((name, _path, query) => {
       if (name === 'soundLikesIds') return (query as { offset?: string }).offset ? { collection: [4, 5], next_href: null } : { collection: [1, 2, 3], next_href: 'https://api-v2.soundcloud.com/x?offset=3' };
       return String((query as { ids: string }).ids).split(',').map((id) => ({ id: Number(id), kind: 'track' }));
