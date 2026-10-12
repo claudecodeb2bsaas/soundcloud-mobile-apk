@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "SoundCloud Wave",
+    "slug": "soundcloud-wave",
+    "scheme": "scwave",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#121212",
+    "android": {
+      "package": "io.github.claudecodeb2bsaas.soundcloudwave",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false,
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-sqlite",
+      "expo-notifications",
+      "./plugins/withReleaseSigning",
+      "expo-background-task",
+      "expo-asset",
+      "expo-media-library"
+    ]
+  }
+}
