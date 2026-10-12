@@ -38,6 +38,22 @@ desktop-клиента (`../src/services`), чистые модули копир
   Синхронизация с desktop пока ручная; общий пакет вынесем позже.
   Не перенесено сознательно: `radar`, `radarSchedule`, `tasteModel`, `historyIndex`, `recommendStore` (нужно хранилище,
   этапы 6–7), `wave/quiet` (этап 9), всё, что работает с DOM страницы.
+- Этап 2: готов. Что есть:
+  - `src/api`: клиент api-v2 (`client.ts`) с диспетчером из `core/pageSources`, ключом клиента и токеном, повтором после
+    401 с новым `client_id` и тайм-аутом; таблица эндпоинтов (`endpoints.ts`); `client_id` берётся обычным GET
+    `https://soundcloud.com/` с User-Agent настольного браузера (`clientId.ts`); методы `me`, `likedIds`, `tracksByIds`,
+    `searchTracks`, `relatedTracks`, `resolve` (`soundcloud.ts`).
+  - `src/auth`: вход в WebView на `soundcloud.com/signin` с настольным User-Agent и скриптом, который ловит токен
+    из заголовка Authorization запросов к api-v2, из cookie `oauth_token` и `client_id` из hydration (`loginScript.ts`);
+    ручной ввод токена как запасной путь; проверка токена запросом `/me`; хранение в `expo-secure-store`.
+  - Экраны: главная показывает лайки после входа, `/login` вход.
+  - Проверено 12.10.2026 без входа: публичные эндпоинты отвечают 200, `/me`, `/me/track_likes/ids`,
+    `/me/play-history/tracks`, `/me/playlist_likes/ids` отвечают 401.
+  - Не проверено на реальном аккаунте и устройстве: поймает ли скрипт токен при входе, работает ли вход через Google
+    в WebView (Google может блокировать встроенные браузеры; тогда запасной путь по токену).
+  - Для этапа 3: у части треков нет открытого AAC. У трека из проверки были `hls audio/mpeg` и `progressive audio/mpeg`,
+    а AAC только с шифрованием (`cbc/ctr-encrypted-hls`). Выбор потока: progressive mp3, потом hls mp3, потом hls AAC,
+    шифрованное только как «недоступно».
 - Проверить на устройстве (Hermes): регулярки `\p{L}`, `\p{Script=Cyrillic}` в `waveGenres` и `trackIdentity`,
   `Intl.PluralRules` в `waveTexts`.
 
