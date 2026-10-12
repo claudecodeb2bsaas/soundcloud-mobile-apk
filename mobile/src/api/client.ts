@@ -37,6 +37,8 @@ export interface ApiClientOptions {
 export interface CallOptions {
     /** Фоновый запрос ждёт пользовательских и подчиняется паузам после 429. По умолчанию запрос пользовательский */
     background?: boolean;
+    /** Лайки меняются PUT и DELETE; по умолчанию GET */
+    method?: 'GET' | 'PUT' | 'POST' | 'DELETE';
 }
 
 export interface ApiResponse<T = unknown> {
@@ -66,14 +68,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         return url.toString();
     }
 
-    async function once(raw: string, query: Query, clientId: string | null, token: string | null): Promise<ApiResponse> {
+    async function once(raw: string, query: Query, clientId: string | null, token: string | null, method = 'GET'): Promise<ApiResponse> {
         const headers: Record<string, string> = { Accept: 'application/json', 'User-Agent': DESKTOP_USER_AGENT };
         if (token) headers.Authorization = `OAuth ${token}`;
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         let response: Response;
         try {
-            response = await doFetch(buildUrl(raw, query, clientId), { headers, signal: controller.signal });
+            response = await doFetch(buildUrl(raw, query, clientId), { method, headers, signal: controller.signal });
         } catch (error) {
             if (controller.signal.aborted) throw new Error(`Тайм-аут запроса ${timeoutMs} мс`);
             throw error;
@@ -93,10 +95,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         return { status: response.status, body };
     }
 
-    async function request(raw: string, query: Query): Promise<ApiResponse> {
+    async function request(raw: string, query: Query, method?: string): Promise<ApiResponse> {
         let { token, clientId } = options.auth();
         try {
-            return await once(raw, query, clientId, token);
+            return await once(raw, query, clientId, token, method);
         } catch (error) {
             // 401 с ключом сайта: ключ мог смениться. Обновляем один раз и повторяем; не помогло, значит отказ входа
             if (error instanceof ApiError && error.status === 401 && options.refreshClientId) {
@@ -104,7 +106,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
                 if (fresh && fresh !== clientId) {
                     clientId = fresh;
                     token = options.auth().token;
-                    return once(raw, query, clientId, token);
+                    return once(raw, query, clientId, token, method);
                 }
             }
             throw error;
@@ -118,11 +120,11 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     return {
         call<T>(name: EndpointName, path: PathParams = {}, query: Query = {}, call?: CallOptions) {
             const raw = base + endpointPath(name, path);
-            return run<T>(() => request(raw, query), call);
+            return run<T>(() => request(raw, query, call?.method), call);
         },
         callUrl<T>(url: string, call?: CallOptions) {
             if (!url.startsWith(base + '/')) return Promise.reject(new Error('Ссылка не на api-v2'));
-            return run<T>(() => request(url, {}), call);
+            return run<T>(() => request(url, {}, call?.method), call);
         },
         dispose: () => dispatcher.dispose(),
     };

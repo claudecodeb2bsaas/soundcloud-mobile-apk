@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../auth/instance';
 import { ProgressBar } from '../components/ProgressBar';
+import { openTrackMenu, toggleLike } from '../components/TrackMenu';
+import { useLikes } from '../wave/instance';
 import { artwork, clock, errorText } from '../player/format';
 import { player, usePlayerState, useProgress } from '../player/instance';
 import { currentItem } from '../player/queue';
@@ -11,6 +14,8 @@ const REPEAT_LABEL = { off: 'Повтор выкл', all: 'Повтор всех
 
 export default function Player() {
   const state = usePlayerState();
+  const signedIn = useAuth().status === 'in';
+  const liked = useLikes();
   const { position, duration } = useProgress();
   const item = currentItem(state.queue);
   const cover = artwork(item?.track.artwork_url, 't500x500');
@@ -42,6 +47,16 @@ export default function Player() {
               {item.track.user?.username ?? ''}
             </Text>
             {item.reason ? <Text style={styles.muted}>{item.reason}</Text> : null}
+            {signedIn ? (
+              <View style={styles.actions}>
+                <Pressable onPress={() => void toggleLike(item.track)} hitSlop={10} accessibilityLabel={liked.has(item.track.id) ? 'Убрать из лайков' : 'В лайки'}>
+                  <Text style={[styles.heart, liked.has(item.track.id) && styles.on]}>{liked.has(item.track.id) ? '♥' : '♡'}</Text>
+                </Pressable>
+                <Pressable onPress={() => openTrackMenu(item.track)} hitSlop={10} accessibilityLabel="Меню трека">
+                  <Text style={styles.heart}>⋯</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {state.preview ? <Text style={styles.warn}>Отрывок 30 секунд: полный трек только по подписке</Text> : null}
             {state.status === 'error' ? <Text style={styles.warn}>{errorText(state.error)}</Text> : null}
           </View>
@@ -87,6 +102,8 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingHorizontal: 24, justifyContent: 'space-around', paddingBottom: 24 },
   cover: { width: '100%', aspectRatio: 1, maxHeight: 340, alignSelf: 'center', borderRadius: 8, backgroundColor: theme.surface },
   info: { gap: 4 },
+  actions: { flexDirection: 'row', gap: 24, marginTop: 8 },
+  heart: { color: theme.muted, fontSize: 26 },
   title: { color: theme.text, fontSize: 22, fontWeight: '700' },
   artist: { color: theme.muted, fontSize: 16 },
   muted: { color: theme.muted, fontSize: 13 },

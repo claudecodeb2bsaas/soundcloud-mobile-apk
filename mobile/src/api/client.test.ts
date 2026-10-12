@@ -37,6 +37,21 @@ describe('клиент api-v2', () => {
     expect(calls[0].headers.Authorization).toBe('OAuth tok-1234567890');
   });
 
+  it('method уходит в запрос и сохраняется при повторе после 401', async () => {
+    const methods: Array<string | undefined> = [];
+    const responses = [401, 200];
+    const fake = (async (_url: string, init?: RequestInit) => {
+      methods.push(init?.method);
+      return new Response('', { status: responses.shift() });
+    }) as unknown as typeof fetch;
+    const state = { token: 'tok-1234567890', clientId: 'OLD' };
+    const api = createApiClient({ auth: () => state, fetch: fake, refreshClientId: async () => (state.clientId = 'NEW') });
+    await api.call('trackLike', { user_id: 1, track_id: 2 }, {}, { method: 'DELETE' });
+    expect(methods).toEqual(['DELETE', 'DELETE']);
+    await api.call('me');
+    expect(methods[2]).toBe('GET');
+  });
+
   it('без входа не шлёт Authorization', async () => {
     const { api, calls } = setup([{ status: 200, body: [] }], { token: null, clientId: 'CID' });
     await api.call('searchCategory', { category: 'tracks' }, { q: 'a' });

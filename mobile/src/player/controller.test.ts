@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WaveTrack } from '../core/waveTypes';
 import { createPlayerController, type AudioEngine, type EngineStatus, type PlayerController } from './controller';
+import { makeItem } from './queue';
 import { StreamUnavailableError, type ResolvedStream, type StreamResolver } from './stream';
 import { parseSnapshot, type SessionSnapshot, type SessionStore } from './session';
 
@@ -238,6 +239,17 @@ describe('управление', () => {
     expect(ctx.engine.loads.at(-1)?.url).toBe('https://cdn/8');
     ctx.player.removeAt(3);
     expect(titles(ctx.player)).toEqual([8, 9, 2]);
+  });
+
+  it('appendItems дописывает в конец и не трогает играющий трек', async () => {
+    const ctx = setup();
+    ctx.player.appendItems([makeItem(track(1)), makeItem(track(2))]);
+    await playingNow(ctx);
+    expect(titles(ctx.player)).toEqual([1, 2]);
+    ctx.player.appendItems([makeItem(track(3))]);
+    expect(titles(ctx.player)).toEqual([1, 2, 3]);
+    expect(ctx.player.getState().queue.index).toBe(0);
+    expect(ctx.engine.loads).toHaveLength(1);
   });
 
   it('вставка в пустую очередь включает трек, очистка всё сбрасывает', async () => {

@@ -151,6 +151,20 @@ export function createSoundCloud(api: ApiClient) {
             return tracksOf(body).filter((track) => !seen.has(track.id) && !!seen.add(track.id));
         },
 
+        /** Поставить или снять лайк трека; без входа или с чужим user_id сайт ответит 401/403 */
+        async setLike(userId: number, trackId: number, liked: boolean, options?: CallOptions): Promise<void> {
+            await api.call('trackLike', { user_id: userId, track_id: trackId }, {}, { ...options, method: liked ? 'PUT' : 'DELETE' });
+        },
+
+        /** Страница жанра: свежие загрузки по метке (recent) или поиск по жанру и меткам (search); query это next прошлой страницы */
+        async genrePage(source: 'recent' | 'search', tag: string, query?: Query, options?: CallOptions): Promise<Page<WaveTrack>> {
+            const { body } =
+                source === 'recent'
+                    ? await api.call('recentTracks', { tag }, query ?? { limit: 50 }, options)
+                    : await api.call('searchCategory', { category: 'tracks' }, query ?? { q: '*', 'filter.genre_or_tag': tag, limit: 50 }, options);
+            return { items: tracksOf(body), next: nextQueryOf(body) };
+        },
+
         async relatedTracks(trackId: number, limit = 50, options?: CallOptions): Promise<WaveTrack[]> {
             return tracksOf((await api.call('relatedSounds', { track_id: trackId }, { limit }, options)).body);
         },

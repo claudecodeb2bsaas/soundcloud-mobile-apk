@@ -70,6 +70,35 @@ describe('артисты и история', () => {
   });
 });
 
+describe('лайки и жанры', () => {
+  it('setLike шлёт PUT для лайка и DELETE для снятия', async () => {
+    const methods: Array<string | undefined> = [];
+    const api = {
+      call: async (name: string, path: object, _query: object, options?: { method?: string }) => {
+        methods.push(`${name} ${JSON.stringify(path)} ${options?.method}`);
+        return { status: 200, body: null };
+      },
+    } as unknown as ApiClient;
+    const sc = createSoundCloud(api);
+    await sc.setLike(7, 42, true);
+    await sc.setLike(7, 42, false);
+    expect(methods).toEqual(['trackLike {"user_id":7,"track_id":42} PUT', 'trackLike {"user_id":7,"track_id":42} DELETE']);
+  });
+
+  it('genrePage берёт свою точку и продолжает по next', async () => {
+    const { api, calls } = fakeApi(() => ({ collection: [{ id: 1, kind: 'track' }], next_href: 'https://api-v2.soundcloud.com/x?offset=9&limit=50&client_id=K' }));
+    const sc = createSoundCloud(api);
+    const first = await sc.genrePage('recent', 'phonk');
+    expect(first.next).toEqual({ offset: '9', limit: '50' });
+    await sc.genrePage('search', 'phonk');
+    await sc.genrePage('recent', 'phonk', first.next ?? undefined);
+    expect(calls.map((c) => c.name)).toEqual(['recentTracks', 'searchCategory', 'recentTracks']);
+    expect(calls[0].path).toEqual({ tag: 'phonk' });
+    expect(calls[1].query).toMatchObject({ 'filter.genre_or_tag': 'phonk' });
+    expect(calls[2].query).toEqual({ offset: '9', limit: '50' });
+  });
+});
+
 describe('createSoundCloud', () => {
   it('tracksByIds бьёт на пачки по 50, хранит порядок и пропускает ненайденные', async () => {
     const ids = Array.from({ length: 120 }, (_, i) => i + 1);

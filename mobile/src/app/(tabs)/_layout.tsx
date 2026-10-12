@@ -24,6 +24,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Главная', tabBarIcon: icon('⌂') }} />
+      <Tabs.Screen name="wave" options={{ title: 'Волна', tabBarIcon: icon('≋') }} />
       <Tabs.Screen name="search" options={{ title: 'Поиск', tabBarIcon: icon('⌕') }} />
       <Tabs.Screen name="library" options={{ title: 'Библиотека', tabBarIcon: icon('♫') }} />
     </Tabs>

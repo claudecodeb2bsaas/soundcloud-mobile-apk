@@ -7,9 +7,11 @@ import { currentItem } from '../../player/queue';
 import { usePlayerState } from '../../player/instance';
 import { theme } from '../../theme';
 import { useLoad } from '../../ui/useLoad';
+import { useWave, wave } from '../../wave/instance';
 
 function Feed() {
   const playing = currentItem(usePlayerState().queue)?.track.id;
+  const waveState = useWave();
   const { data, error, reload } = useLoad(async () => {
     const [history, likes] = await Promise.all([
       auth.sc.history(20),
@@ -21,6 +23,14 @@ function Feed() {
   return (
     <Loadable ready={!!data} error={error} onRetry={reload}>
       <ScrollView contentContainerStyle={styles.content}>
+        <Pressable style={styles.wave} onPress={() => void wave.start()} disabled={waveState.status === 'loading'}>
+          <Text style={styles.waveText}>{waveState.status === 'loading' ? 'Подбираю…' : '≋  Включить мою волну'}</Text>
+        </Pressable>
+        {waveState.status === 'empty' || waveState.status === 'error' ? (
+          <Text style={[styles.muted, styles.waveNote]}>
+            {waveState.status === 'empty' ? 'Подобрать нечего: послушай или лайкни что-нибудь' : 'Не удалось подобрать треки. Проверь соединение.'}
+          </Text>
+        ) : null}
         <Shelf title="Недавно слушал" tracks={data?.history ?? []} playing={playing} />
         <Shelf title="Лайки" tracks={data?.likes ?? []} playing={playing} />
         {data && !data.history.length && !data.likes.length ? <Text style={styles.muted}>Пока пусто: послушай или лайкни что-нибудь</Text> : null}
@@ -55,4 +65,7 @@ const styles = StyleSheet.create({
   link: { color: theme.accent, fontSize: 15 },
   content: { paddingTop: 8, paddingBottom: 16 },
   muted: { color: theme.muted, fontSize: 13, textAlign: 'center', padding: 24 },
+  wave: { backgroundColor: theme.accent, borderRadius: 24, paddingVertical: 14, alignItems: 'center', marginHorizontal: 16, marginBottom: 20 },
+  waveNote: { padding: 0, marginTop: -8, marginBottom: 16 },
+  waveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

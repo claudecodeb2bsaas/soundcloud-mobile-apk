@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { useSyncExternalStore } from 'react';
-import { Alert, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { auth } from '../auth/instance';
+import { auth, useAuth } from '../auth/instance';
 import type { WaveTrack } from '../core/waveTypes';
 import { artistIdOf } from '../player/format';
 import { player } from '../player/instance';
+import { currentItem } from '../player/queue';
 import { theme } from '../theme';
+import { likes, marks, useLikes, useMarks, wave } from '../wave/instance';
 
 // Меню трека: одно на приложение, открывается из любого списка через openTrackMenu
 
@@ -29,19 +31,53 @@ async function playSimilar(track: WaveTrack): Promise<void> {
   }
 }
 
+export async function toggleLike(track: WaveTrack): Promise<void> {
+  try {
+    await likes.toggle(track.id);
+  } catch (error) {
+    const status = (error as { status?: number } | null)?.status;
+    Alert.alert(status === 401 || status === 403 ? 'Вход устарел, войди снова' : 'Не удалось изменить лайк');
+  }
+}
+
+/** «Не нравится» и скрытый артист убирают подходящее из очереди: играющее пропускается, остальное удаляется */
+function purgeQueue(): void {
+  const data = marks.getSnapshot();
+  const bad = (track: WaveTrack): boolean => track.id in data.tracks || (artistIdOf(track) ?? 0) in data.artists;
+  const { queue } = player.getState();
+  for (let i = queue.items.length - 1; i > queue.index; i--) if (bad(queue.items[i].track)) player.removeAt(i);
+  const now = currentItem(player.getState().queue);
+  if (now && bad(now.track)) player.next();
+}
+
 export function TrackMenuHost() {
   const track = useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => target, () => target);
   const insets = useSafeAreaInsets();
+  const signedIn = useAuth().status === 'in';
+  const liked = useLikes();
+  const data = useMarks();
   if (!track) return null;
 
   const artist = artistIdOf(track);
+  const artistName = track.user?.username ?? '';
+  const disliked = track.id in data.tracks;
+  const hidden = artist !== null && artist in data.artists;
   const run = (action: () => void) => () => { set(null); action(); };
   const actions: Array<{ label: string; action: () => void; off?: boolean }> = [
+    { label: liked.has(track.id) ? 'Убрать из лайков' : 'В лайки', action: () => void toggleLike(track), off: !signedIn },
+    { label: 'Волна от трека', action: () => void wave.start({ kind: 'track', track }), off: !signedIn },
+    { label: 'Волна от артиста', action: () => void wave.start({ kind: 'artist', id: artist ?? 0, name: artistName }), off: !signedIn || artist === null },
     { label: 'Играть следом', action: () => player.insertNext(track) },
     { label: 'В конец очереди', action: () => player.insertLast(track) },
     { label: 'Играть похожее', action: () => void playSimilar(track) },
     { label: 'К артисту', action: () => router.push(`/artist/${artist}`), off: artist === null },
     { label: 'Поделиться', action: () => void Share.share({ message: track.permalink_url ?? '' }), off: !track.permalink_url },
+    { label: disliked ? 'Вернуть в подбор' : 'Не нравится', action: () => { marks.toggleTrack(track); purgeQueue(); } },
+    {
+      label: hidden ? 'Показывать артиста' : 'Скрыть артиста',
+      action: () => { if (artist !== null) { marks.toggleArtist(artist, artistName); purgeQueue(); } },
+      off: artist === null,
+    },
   ];
 
   return (
@@ -49,12 +85,14 @@ export function TrackMenuHost() {
       <Pressable style={styles.backdrop} onPress={() => set(null)} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}>
         <Text style={styles.title} numberOfLines={1}>{track.title}</Text>
-        <Text style={styles.artist} numberOfLines={1}>{track.user?.username ?? ''}</Text>
-        {actions.filter((a) => !a.off).map((a) => (
-          <Pressable key={a.label} style={styles.item} onPress={run(a.action)}>
-            <Text style={styles.itemText}>{a.label}</Text>
-          </Pressable>
-        ))}
+        <Text style={styles.artist} numberOfLines={1}>{artistName}</Text>
+        <ScrollView>
+          {actions.filter((a) => !a.off).map((a) => (
+            <Pressable key={a.label} style={styles.item} onPress={run(a.action)}>
+              <Text style={styles.itemText}>{a.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -62,9 +100,9 @@ export function TrackMenuHost() {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#00000099' },
-  sheet: { backgroundColor: theme.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 16 },
+  sheet: { backgroundColor: theme.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 16, maxHeight: '85%' },
   title: { color: theme.text, fontSize: 16, fontWeight: '600', paddingHorizontal: 20 },
   artist: { color: theme.muted, fontSize: 13, paddingHorizontal: 20, paddingBottom: 8 },
-  item: { paddingVertical: 14, paddingHorizontal: 20 },
+  item: { paddingVertical: 13, paddingHorizontal: 20 },
   itemText: { color: theme.text, fontSize: 16 },
 });

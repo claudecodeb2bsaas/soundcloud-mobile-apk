@@ -79,6 +79,8 @@ export interface PlayerController {
     previous(): void;
     jumpTo(index: number): void;
     seek(seconds: number): void;
+    /** Дописывает записи в конец очереди; в пустую очередь ставит и запускает */
+    appendItems(items: QueueItem[]): void;
     insertNext(track: WaveTrack, reason?: string): void;
     insertLast(track: WaveTrack, reason?: string): void;
     removeAt(index: number): void;
@@ -356,6 +358,11 @@ export function createPlayerController(options: ControllerOptions): PlayerContro
             setProgress(to, progress.duration);
         },
 
+        appendItems(items) {
+            if (!items.length) return;
+            if (!state.queue.items.length) { playItems(items); return; }
+            setState({ queue: { ...state.queue, items: [...state.queue.items, ...items] } });
+        },
         insertNext(track, reason) {
             if (!state.queue.items.length) { playItems([makeItem(track, reason)]); return; }
             setState({ queue: queueInsertNext(state.queue, makeItem(track, reason)) });
