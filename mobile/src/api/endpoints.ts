@@ -18,6 +18,7 @@ const table = {
     mixedSelections: () => '/mixed-selections',
     systemPlaylist: (p: PathParams) => `/system-playlists/${seg(p, 'urn')}`,
     playlist: (p: PathParams) => `/playlists/${seg(p, 'id')}`,
+    user: (p: PathParams) => `/users/${seg(p, 'id')}`,
     userTracks: (p: PathParams) => `/users/${seg(p, 'id')}/tracks`,
     userToptracks: (p: PathParams) => `/users/${seg(p, 'id')}/toptracks`,
     userAlbums: (p: PathParams) => `/users/${seg(p, 'id')}/albums`,

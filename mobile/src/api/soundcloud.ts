@@ -68,6 +68,36 @@ export function meOf(body: unknown): Me | null {
     };
 }
 
+export interface UserSummary {
+    id: number;
+    username: string;
+    avatarUrl: string | null;
+    followers: number;
+    trackCount: number;
+    city: string;
+}
+
+export function userOf(body: unknown): UserSummary | null {
+    const user = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+    if (!user || !isId(user.id) || (user.kind !== undefined && user.kind !== 'user')) return null;
+    const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+    return {
+        id: user.id,
+        username: typeof user.username === 'string' ? user.username : '',
+        avatarUrl: typeof user.avatar_url === 'string' ? user.avatar_url : null,
+        followers: num(user.followers_count),
+        trackCount: num(user.track_count),
+        city: typeof user.city === 'string' ? user.city : '',
+    };
+}
+
+export function usersOf(body: unknown): UserSummary[] {
+    return listOf(body).flatMap((entry) => {
+        const user = userOf(entry);
+        return user ? [user] : [];
+    });
+}
+
 const BATCH = 50;
 
 export function createSoundCloud(api: ApiClient) {
@@ -96,6 +126,29 @@ export function createSoundCloud(api: ApiClient) {
         async searchTracks(q: string, limit = 30, options?: CallOptions): Promise<Page<WaveTrack>> {
             const { body } = await api.call('searchCategory', { category: 'tracks' }, { q, limit }, options);
             return { items: tracksOf(body), next: nextQueryOf(body) };
+        },
+
+        async searchUsers(q: string, limit = 20, options?: CallOptions): Promise<UserSummary[]> {
+            return usersOf((await api.call('searchCategory', { category: 'users' }, { q, limit }, options)).body);
+        },
+
+        async user(id: number, options?: CallOptions): Promise<UserSummary | null> {
+            return userOf((await api.call('user', { id }, {}, options)).body);
+        },
+
+        async userTracks(id: number, limit = 20, options?: CallOptions): Promise<WaveTrack[]> {
+            return tracksOf((await api.call('userTracks', { id }, { limit }, options)).body);
+        },
+
+        async userToptracks(id: number, limit = 10, options?: CallOptions): Promise<WaveTrack[]> {
+            return tracksOf((await api.call('userToptracks', { id }, { limit }, options)).body);
+        },
+
+        /** Недавно слушанное: новые первыми, без повторов */
+        async history(limit = 50, options?: CallOptions): Promise<WaveTrack[]> {
+            const { body } = await api.call('playHistoryTracks', {}, { limit }, options);
+            const seen = new Set<number>();
+            return tracksOf(body).filter((track) => !seen.has(track.id) && !!seen.add(track.id));
         },
 
         async relatedTracks(trackId: number, limit = 50, options?: CallOptions): Promise<WaveTrack[]> {

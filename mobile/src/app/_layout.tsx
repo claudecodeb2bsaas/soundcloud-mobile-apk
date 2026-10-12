@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { MiniPlayer } from '../components/MiniPlayer';
+import { TrackMenuHost } from '../components/TrackMenu';
 import { auth } from '../auth/instance';
 import { player } from '../player/instance';
 import { theme } from '../theme';
@@ -23,6 +24,7 @@ export default function RootLayout() {
         <Stack.Screen name="player" options={{ presentation: 'modal' }} />
       </Stack>
       <MiniPlayer />
+      <TrackMenuHost />
     </View>
   );
 }

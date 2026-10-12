@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ApiClient } from './client';
-import { createSoundCloud, idsOf, meOf, nextQueryOf, tracksOf } from './soundcloud';
+import { createSoundCloud, idsOf, meOf, nextQueryOf, tracksOf, userOf, usersOf } from './soundcloud';
 
 function fakeApi(handler: (name: string, path: object, query: object) => unknown) {
   const calls: Array<{ name: string; path: object; query: object }> = [];
@@ -37,6 +37,36 @@ describe('разбор ответов', () => {
     expect(meOf({ id: 9, username: 'u', permalink: 'p', avatar_url: 'a' })).toEqual({ id: 9, username: 'u', permalink: 'p', avatarUrl: 'a' });
     expect(meOf({ username: 'u' })).toBeNull();
     expect(meOf(null)).toBeNull();
+  });
+});
+
+describe('артисты и история', () => {
+  it('userOf требует id и вид user', () => {
+    expect(userOf({ id: 5, kind: 'user', username: 'a', avatar_url: 'x', followers_count: 12, track_count: 3, city: 'Минск' })).toEqual({
+      id: 5, username: 'a', avatarUrl: 'x', followers: 12, trackCount: 3, city: 'Минск',
+    });
+    expect(userOf({ id: 5 })?.followers).toBe(0);
+    expect(userOf({ id: 5, kind: 'playlist' })).toBeNull();
+    expect(userOf({ username: 'a' })).toBeNull();
+    expect(usersOf({ collection: [{ id: 1, kind: 'user' }, { id: 2, kind: 'track' }, null] }).map((u) => u.id)).toEqual([1]);
+  });
+
+  it('методы артиста и истории обращаются к своим точкам', async () => {
+    const { api, calls } = fakeApi((name) => {
+      if (name === 'user') return { id: 7, kind: 'user', username: 'dj' };
+      if (name === 'searchCategory') return { collection: [{ id: 7, kind: 'user' }] };
+      if (name === 'playHistoryTracks') return { collection: [{ track: { id: 1 } }, { track: { id: 2 } }, { track: { id: 1 } }] };
+      return { collection: [{ id: 9, kind: 'track' }] };
+    });
+    const sc = createSoundCloud(api);
+    expect((await sc.user(7))?.username).toBe('dj');
+    expect((await sc.searchUsers('dj')).map((u) => u.id)).toEqual([7]);
+    expect((await sc.userTracks(7)).map((t) => t.id)).toEqual([9]);
+    expect((await sc.userToptracks(7)).map((t) => t.id)).toEqual([9]);
+    expect((await sc.history()).map((t) => t.id)).toEqual([1, 2]);
+    expect(calls.map((call) => call.name)).toEqual(['user', 'searchCategory', 'userTracks', 'userToptracks', 'playHistoryTracks']);
+    expect(calls[1].path).toEqual({ category: 'users' });
+    expect(calls[2].path).toEqual({ id: 7 });
   });
 });
 
