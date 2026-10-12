@@ -8,6 +8,6 @@ const excluded = new Set(ignored.stdout.split('\0').filter(Boolean));
 const forbidden = files.filter(file => excluded.has(file) || /(^|\/)(docs|node_modules|build|tsc)(\/|$)/i.test(file) ||
     /(^|\/)\.env($|\.)/i.test(file) ||
     // Лицензия шрифта OFL обязана ехать рядом с файлами шрифта
-    (/\.(md|txt)$/i.test(file) && !/^(README\.md|LICENSE(?:\.txt)?)$/i.test(file) && !/(^|\/)fonts\/OFL\.txt$/.test(file)) || /\.(pem|pfx|p12|key|log)$/i.test(file));
+    (/\.(md|txt)$/i.test(file) && !/^(README\.md|LICENSE(?:\.txt)?)$/i.test(file) && !/(^|\/)fonts\/OFL\.txt$/.test(file) && !/^mobile\/[^/]+\.md$/.test(file)) || /\.(pem|pfx|p12|key|log)$/i.test(file));
 if (forbidden.length) { console.error('Лишние файлы в репозитории:\n' + forbidden.join('\n')); process.exitCode = 1; }
 else console.log('Состав репозитория проверен');

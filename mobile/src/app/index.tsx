@@ -4,16 +4,15 @@ import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { WaveTrack } from '../core/waveTypes';
 import { auth, useAuth } from '../auth/instance';
+import { artwork } from '../player/format';
+import { player, usePlayerState } from '../player/instance';
+import { currentItem } from '../player/queue';
 import { theme } from '../theme';
-
-function cover(track: WaveTrack): string | null {
-  // Сайт отдаёт обложку large (100x100); t200x200 заметно чётче в списке
-  return track.artwork_url ? track.artwork_url.replace('-large.', '-t200x200.') : null;
-}
 
 function Likes() {
   const [tracks, setTracks] = useState<WaveTrack[] | null>(null);
   const [error, setError] = useState('');
+  const playing = currentItem(usePlayerState().queue)?.track.id;
 
   const load = useCallback(async () => {
     setError('');
@@ -52,20 +51,24 @@ function Likes() {
     <FlatList
       data={tracks}
       keyExtractor={(track) => String(track.id)}
+      contentContainerStyle={styles.listEnd}
       ListEmptyComponent={<Text style={[styles.muted, styles.pad]}>Лайков пока нет</Text>}
-      renderItem={({ item }) => (
-        <View style={styles.row}>
-          {cover(item) ? <Image source={{ uri: cover(item) as string }} style={styles.cover} /> : <View style={styles.cover} />}
-          <View style={styles.meta}>
-            <Text style={styles.track} numberOfLines={1}>
-              {item.title}
-            </Text>
-            <Text style={styles.muted} numberOfLines={1}>
-              {item.user?.username ?? ''}
-            </Text>
-          </View>
-        </View>
-      )}
+      renderItem={({ item, index }) => {
+        const cover = artwork(item.artwork_url);
+        return (
+          <Pressable style={styles.row} onPress={() => player.playTracks(tracks, index)}>
+            {cover ? <Image source={{ uri: cover }} style={styles.cover} /> : <View style={styles.cover} />}
+            <View style={styles.meta}>
+              <Text style={[styles.track, item.id === playing && styles.accent]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={styles.muted} numberOfLines={1}>
+                {item.user?.username ?? ''}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      }}
     />
   );
 }
@@ -74,7 +77,7 @@ export default function Home() {
   const state = useAuth();
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>{state.status === 'in' ? state.session.user.username : 'SoundCloud Wave'}</Text>
         {state.status === 'in' ? (
@@ -111,10 +114,12 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 },
   muted: { color: theme.muted, fontSize: 13, textAlign: 'center' },
   pad: { padding: 16 },
+  listEnd: { paddingBottom: 16 },
   button: { backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 28 },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 12 },
   cover: { width: 52, height: 52, borderRadius: 4, backgroundColor: theme.surface },
   meta: { flex: 1, gap: 2 },
   track: { color: theme.text, fontSize: 15, fontWeight: '500' },
+  accent: { color: theme.accent },
 });

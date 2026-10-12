@@ -2,7 +2,9 @@ name: Проверка Windows
 on:
   push:
     branches: [main]
+    paths-ignore: ['mobile/**', '.github/workflows/android-apk.yml']
   pull_request:
+    paths-ignore: ['mobile/**', '.github/workflows/android-apk.yml']
   workflow_dispatch:
 permissions:
   contents: read

@@ -15,12 +15,15 @@
         "backgroundColor": "#121212",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.POST_NOTIFICATIONS"]
     },
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "expo-secure-store"
+      "expo-secure-store",
+      ["expo-audio", { "enableBackgroundPlayback": true, "enableBackgroundRecording": false, "recordAudioAndroid": false, "microphonePermission": false }],
+      "expo-sqlite"
     ]
   }
 }
