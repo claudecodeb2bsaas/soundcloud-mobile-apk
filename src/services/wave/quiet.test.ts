@@ -184,8 +184,40 @@ beforeEach(() => {
 afterEach(() => {
     HTMLMediaElement.prototype.play = originalPlay;
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(navigator, 'mediaSession');
     vi.useRealTimers();
 });
+
+// Сведения о треке у страницы, как navigator.mediaSession в Chromium. Журнал присвоений: название или null при сбросе
+class FakeMetadata {
+    title: string;
+    artist: string;
+    album: string;
+    artwork: MediaImage[];
+    constructor(init: MediaMetadataInit = {}) {
+        this.title = init.title ?? '';
+        this.artist = init.artist ?? '';
+        this.album = init.album ?? '';
+        this.artwork = [...(init.artwork ?? [])];
+    }
+}
+function fakeMediaSession(): { log: Array<string | null>; session: { metadata: FakeMetadata | null } } {
+    const log: Array<string | null> = [];
+    let current: FakeMetadata | null = null;
+    const session = {
+        get metadata(): FakeMetadata | null {
+            return current;
+        },
+        set metadata(value: FakeMetadata | null) {
+            current = value;
+            log.push(value ? value.title : null);
+        },
+    };
+    Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: session });
+    vi.stubGlobal('MediaMetadata', FakeMetadata);
+    return { log, session };
+}
 
 function install() {
     return installQuiet({
@@ -248,6 +280,64 @@ it('плавный переход: хвост в своём элементе, с
     section.dispose();
     expect(Object.prototype.hasOwnProperty.call(siteAudio, 'volume')).toBe(false);
     expect(siteAudio.volume).toBe(0.5);
+});
+
+it('плавный переход: сведения о треке объявляются заново, когда хвост заиграл, громкость сайта прошла через ноль и хвост снят', async () => {
+    // Второй играющий элемент убирает клиент из медиасессий Windows, и медиаклавиши не доходят. Возвращает сброс
+    // сведений и те же сведения через 0,3 с
+    const { log, session } = fakeMediaSession();
+    session.metadata = new FakeMetadata({ title: 'A', artist: 'X', artwork: [{ src: 'https://i1.sndcdn.com/a.jpg', sizes: '500x500' }] });
+    log.length = 0;
+    options = { edges: true, crossfade: 5 };
+    from = 179000;
+    const section = install();
+    void siteAudio.play();
+    siteAudio.volume = 0.8;
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(deckPlaying).toBe(true);
+    expect(log).toEqual([null, 'A']);
+    expect(session.metadata?.artist).toBe('X');
+    expect(session.metadata?.artwork).toEqual([{ src: 'https://i1.sndcdn.com/a.jpg', sizes: '500x500' }]);
+    // Сайт перешёл дальше и выставил сведения нового трека
+    await vi.advanceTimersByTimeAsync(8600);
+    expect(player.playNext).toHaveBeenCalledTimes(1);
+    session.metadata = new FakeMetadata({ title: 'B' });
+    const switched = log.length;
+    await vi.advanceTimersByTimeAsync(5800);
+    expect(deckPlaying).toBe(false);
+    await vi.advanceTimersByTimeAsync(600);
+    // Громкость сайта вернулась из нуля, хвост снят: сведения объявлены заново, копия старого трека новый не затёрла
+    expect(log.slice(switched)).toContain(null);
+    expect(log.slice(switched)).not.toContain('A');
+    expect(log[log.length - 1]).toBe('B');
+    expect(session.metadata?.title).toBe('B');
+    section.dispose();
+});
+
+it('снятие во время сброса сведений возвращает их сразу, а без сведений у страницы сбрасывать нечего', async () => {
+    const { log, session } = fakeMediaSession();
+    session.metadata = new FakeMetadata({ title: 'A' });
+    log.length = 0;
+    options = { edges: true, crossfade: 5 };
+    from = 179000;
+    const section = install();
+    void siteAudio.play();
+    for (let i = 0; i < 300 && log[log.length - 1] !== null; i++) await vi.advanceTimersByTimeAsync(10);
+    expect(log).toEqual([null]);
+    section.dispose();
+    expect(session.metadata?.title).toBe('A');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(log).toEqual([null, 'A']);
+    // Сайт ещё не выставил сведения: хвост заиграл, а сбрасывать нечего
+    const empty = fakeMediaSession();
+    deckPlaying = false;
+    from = 179000;
+    started = Date.now();
+    const next = install();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(deckPlaying).toBe(true);
+    expect(empty.log).toEqual([]);
+    next.dispose();
 });
 
 it('перемотка к концу: хвост успевает, переход короче, до передачи громкость полная', async () => {

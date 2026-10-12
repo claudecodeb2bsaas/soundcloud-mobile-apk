@@ -153,13 +153,19 @@ export function installQuiet(core: QuietCore): QuietSection {
     // Сервер лицензий Widevine, куда ходит и сайт (запрос сайта снят 10.10.2026): тело это сообщение сессии ключей,
     // токен в адресе
     const LICENSE = 'https://license.media-streaming.soundcloud.cloud/playback/widevine';
+    // Второй играющий элемент на странице убирает клиент из медиасессий Windows, и медиаклавиши никуда не доходят, пока
+    // сайт сам не выставит сведения о треке на обычной смене трека. Возвращает клиент сброс сведений и те же сведения
+    // через 0,3 с, без паузы он иногда пропадает снова (проверено 12.10.2026 в dev-клиенте). Объявление идёт через
+    // 0,15 с после последнего из событий подряд
+    const ANNOUNCE_DELAY = 150;
+    const ANNOUNCE_GAP = 300;
 
     interface SiteAudio { context: AudioContext; gain: GainNode; element: HTMLMediaElement | null }
     // keys: MediaKeys элемента, ставятся один раз; session и objectUrl: сессия ключей и MediaSource зашифрованного хвоста;
-    // license: ответ на неё
+    // license: ответ на неё; played: элемент запускали после прошлого снятия, его остановка тоже прячет клиент от Windows
     interface Deck {
         context: AudioContext; element: HTMLAudioElement; gain: GainNode; busy: boolean;
-        keys: MediaKeys | null; session: MediaKeySession | null; license: 'wait' | 'usable' | 'failed'; objectUrl: string;
+        keys: MediaKeys | null; session: MediaKeySession | null; license: 'wait' | 'usable' | 'failed'; objectUrl: string; played: boolean;
     }
     // load: поток грузится; sync: свой элемент играет без звука и подгоняется; ready: сошёлся; out: хвост после передачи
     // readings: последние расхождения с треком сайта, с; stable: шагов подряд в допуске; calm: шагов подряд со скоростью 1
@@ -192,6 +198,9 @@ export function installQuiet(core: QuietCore): QuietSection {
     let miss: CrossfadeStage | null = null;
     let reported = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Объявление сведений о треке и копия сведений на время их сброса
+    let announceTimer: ReturnType<typeof setTimeout> | undefined;
+    let heldMetadata: MediaMetadataInit | null = null;
     const originalPlay = HTMLMediaElement.prototype.play;
     // Элемент сайта живёт вне документа, поэтому ловится при запуске. Свои элементы хвоста не в счёт
     HTMLMediaElement.prototype.play = function (this: HTMLMediaElement, ...args: []) {
@@ -199,7 +208,36 @@ export function installQuiet(core: QuietCore): QuietSection {
         return originalPlay.apply(this, args);
     };
     function apply(): void {
-        if (media && volume?.set) volume.set.call(media, Math.max(0, Math.min(1, base * level)));
+        if (!media || !volume?.get || !volume.set) return;
+        const before = volume.get.call(media) as number;
+        const next = Math.max(0, Math.min(1, base * level));
+        volume.set.call(media, next);
+        // Громкость сайта из нуля, пока играет свой элемент: клиент пропал из медиасессий сразу после этого (замер
+        // 12.10.2026). Уход в ноль, похоже, действует так же
+        if ((before === 0) !== (next === 0) && decks.some((deck) => !deck.element.paused)) announce();
+    }
+    function announce(): void {
+        if (typeof MediaMetadata !== 'function' || !navigator.mediaSession) return;
+        if (announceTimer !== undefined) clearTimeout(announceTimer);
+        announceTimer = setTimeout(dropMetadata, ANNOUNCE_DELAY);
+    }
+    function dropMetadata(): void {
+        announceTimer = undefined;
+        if (core.disposed()) return;
+        const session = navigator.mediaSession;
+        const metadata = session.metadata;
+        // Во время прошлого сброса сведений нет, тогда в ход идёт снятая в тот раз копия
+        if (metadata) heldMetadata = { title: metadata.title, artist: metadata.artist, album: metadata.album, artwork: metadata.artwork.map((image) => ({ ...image })) };
+        if (!heldMetadata) return;
+        session.metadata = null;
+        announceTimer = setTimeout(restoreMetadata, ANNOUNCE_GAP);
+    }
+    function restoreMetadata(): void {
+        announceTimer = undefined;
+        const held = heldMetadata;
+        heldMetadata = null;
+        // Сайт за это время выставил сведения нового трека: они и так объявлены заново
+        if (held && navigator.mediaSession.metadata === null) navigator.mediaSession.metadata = new MediaMetadata(held);
     }
     function setLevel(value: number): void {
         if (Math.abs(value - level) < 0.0005) return;
@@ -293,7 +331,7 @@ export function installQuiet(core: QuietCore): QuietSection {
         gain.gain.value = 0;
         source.connect(gain);
         gain.connect(context.destination);
-        const deck: Deck = { context, element, gain, busy: true, keys: null, session: null, license: 'wait', objectUrl: '' };
+        const deck: Deck = { context, element, gain, busy: true, keys: null, session: null, license: 'wait', objectUrl: '', played: false };
         decks.push(deck);
         return deck;
     }
@@ -320,6 +358,10 @@ export function installQuiet(core: QuietCore): QuietSection {
         if (session) session.close().catch((error: unknown) => console.warn('Плавный переход: сессия ключей не закрылась', error));
         deck.busy = false;
         if (item.phase === 'out') restoreSite(item.site);
+        if (deck.played) {
+            deck.played = false;
+            announce();
+        }
     }
     function dropTail(): void {
         if (!tail) return;
@@ -514,8 +556,10 @@ export function installQuiet(core: QuietCore): QuietSection {
             deck.gain.gain.cancelScheduledValues(0);
             deck.gain.gain.value = 0;
             element.playbackRate = 1;
+            deck.played = true;
             await element.play();
             if (stale()) return;
+            announce();
             current.stage = 'sync';
             current.phase = 'sync';
         } catch (error) {
@@ -792,6 +836,10 @@ export function installQuiet(core: QuietCore): QuietSection {
             decks.length = 0;
             unwatch();
             HTMLMediaElement.prototype.play = originalPlay;
+            // Сведения о треке не остаются сброшенными
+            if (announceTimer !== undefined) clearTimeout(announceTimer);
+            if (heldMetadata) restoreMetadata();
+            announceTimer = undefined;
         },
     };
 }
