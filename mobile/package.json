@@ -28,8 +28,6 @@
   "devDependencies": {
     "@types/node": "^24.19.2",
     "@types/react": "~19.2.2",
-    "eslint": "^9.0.0",
-    "eslint-config-expo": "~57.0.2",
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
@@ -41,8 +39,7 @@
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prebuild": "expo prebuild --platform android --no-install",
-    "lint": "expo lint"
+    "prebuild": "expo prebuild --platform android --no-install"
   },
   "private": true
 }
