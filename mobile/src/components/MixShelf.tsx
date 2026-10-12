@@ -1,13 +1,13 @@
 import { router } from 'expo-router';
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { WAVE_TEXTS } from '../core/waveTexts';
+import { texts } from '../settings/texts';
 import { artwork } from '../player/format';
 import { theme } from '../theme';
 import { useLoad } from '../ui/useLoad';
 import { cardSub, type ShelfCard } from '../wave/shelf';
 import { shelf } from '../wave/instance';
 
-const T = WAVE_TEXTS.ru;
+const T = texts;
 
 type Tile = { key: string; title: string; sub: string; art: string[]; href: string; tone: string };
 

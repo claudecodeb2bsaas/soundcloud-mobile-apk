@@ -23,6 +23,8 @@ export interface Marks {
     toggleArtist(id: number, name: string): boolean;
     hasTrack(id: number): boolean;
     hasArtist(id: number): boolean;
+    /** Снимает отметку по номеру (список отметок в настройках); без отметки ничего не делает */
+    remove(kind: 'track' | 'artist', id: number): void;
 }
 
 function parse(text: string | null): MarksData {
@@ -93,5 +95,11 @@ export function createMarks(store: TextStore, onChange?: (change: MarkChange) =>
         },
         hasTrack: (id) => id in data.tracks,
         hasArtist: (id) => id in data.artists,
+        remove(kind, id) {
+            const key = kind === 'track' ? 'tracks' : 'artists';
+            if (!(id in data[key])) return;
+            toggle(key, id, '');
+            onChange?.({ kind, on: false, id, name: '' });
+        },
     };
 }

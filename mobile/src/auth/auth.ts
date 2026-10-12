@@ -1,7 +1,7 @@
 import { createApiClient, type ApiClient } from '../api/client';
 import { fetchClientId } from '../api/clientId';
 import { createSoundCloud, type SoundCloud } from '../api/soundcloud';
-import { clearSession, loadSession, saveSession, validToken, verifyToken, type KeyValueStore, type Session } from './session';
+import { clearSession, loadAccounts, loadSession, removeAccount, saveAccount, saveSession, validToken, verifyToken, type KeyValueStore, type Session } from './session';
 
 export type AuthState =
     | { status: 'loading'; session: null }
@@ -23,7 +23,12 @@ export interface Auth {
     init(): Promise<void>;
     /** Вход по токену, найденному страницей входа или вставленному вручную. Негодный токен даёт ошибку, вход не меняется */
     signInWithToken(token: string, clientId?: string | null): Promise<void>;
+    /** Выход из текущего аккаунта: он забывается и в списке; остальные остаются для переключения */
     signOut(): Promise<void>;
+    /** Сохранённые аккаунты (до 5), в порядке добавления */
+    accounts(): Promise<Session[]>;
+    /** Переход на сохранённый аккаунт; токен проверяется запросом /me. Негодный токен даёт ошибку, вход не меняется */
+    switchTo(userId: number): Promise<void>;
 }
 
 export function createAuth(options: AuthOptions): Auth {
@@ -62,7 +67,7 @@ export function createAuth(options: AuthOptions): Auth {
     const api = createApiClient({ auth: () => current, refreshClientId, fetch: options.fetch });
     const sc = createSoundCloud(api);
 
-    return {
+    const self: Auth = {
         api,
         sc,
         getState: () => state,
@@ -79,7 +84,18 @@ export function createAuth(options: AuthOptions): Auth {
             }
             current = { token: session.token, clientId: session.clientId };
             set({ status: 'in', session });
+            // Вход, сохранённый до появления списка аккаунтов, попадает в него
+            await saveAccount(options.store, session).catch(() => undefined);
             if (!session.clientId) await refreshClientId().catch(() => null);
+        },
+
+        accounts: () => loadAccounts(options.store),
+
+        async switchTo(userId) {
+            const saved = (await loadAccounts(options.store)).find((account) => account.user.id === userId);
+            if (!saved) throw new Error('Аккаунт не найден');
+            if (state.session?.user.id === userId) return;
+            await self.signInWithToken(saved.token, saved.clientId);
         },
 
         async signInWithToken(token, clientId = null) {
@@ -92,6 +108,7 @@ export function createAuth(options: AuthOptions): Auth {
                 const user = await verifyToken(api);
                 if (!user) throw new Error('SoundCloud не принял токен');
                 const session: Session = { token, clientId: current.clientId, user, savedAt: now() };
+                await saveAccount(options.store, session);
                 await saveSession(options.store, session);
                 set({ status: 'in', session });
             } catch (error) {
@@ -101,9 +118,12 @@ export function createAuth(options: AuthOptions): Auth {
         },
 
         async signOut() {
+            const user = state.session?.user.id;
             current = { token: null, clientId: current.clientId };
             await clearSession(options.store);
+            if (user) await removeAccount(options.store, user);
             set({ status: 'out', session: null });
         },
     };
+    return self;
 }

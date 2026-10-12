@@ -3,7 +3,8 @@ import { useSyncExternalStore } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, useAuth } from '../auth/instance';
-import { fillText, WAVE_TEXTS } from '../core/waveTexts';
+import { fillText } from '../core/waveTexts';
+import { texts } from '../settings/texts';
 import type { WaveTrack } from '../core/waveTypes';
 import { artistIdOf } from '../player/format';
 import { player } from '../player/instance';
@@ -70,8 +71,8 @@ export function TrackMenuHost() {
     { label: 'Волна от трека', action: () => void wave.start({ kind: 'track', track }), off: !signedIn },
     { label: 'Волна от артиста', action: () => void wave.start({ kind: 'artist', id: artist ?? 0, name: artistName }), off: !signedIn || artist === null },
     {
-      label: picked.some((item) => item.id === track.id) ? WAVE_TEXTS.ru.menuUnpick : WAVE_TEXTS.ru.menuPick,
-      action: () => { if (picks.toggle(track) === 'full') Alert.alert(fillText(WAVE_TEXTS.ru.toastPickFull, { count: String(picked.length) })); },
+      label: picked.some((item) => item.id === track.id) ? texts.menuUnpick : texts.menuPick,
+      action: () => { if (picks.toggle(track) === 'full') Alert.alert(fillText(texts.toastPickFull, { count: String(picked.length) })); },
       off: !signedIn,
     },
     { label: 'Играть следом', action: () => player.insertNext(track) },

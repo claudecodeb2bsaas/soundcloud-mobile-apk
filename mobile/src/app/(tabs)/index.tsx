@@ -1,10 +1,11 @@
+import { router } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, useAuth } from '../../auth/instance';
 import { Loadable, RequireAuth } from '../../components/Loadable';
 import { MixShelf } from '../../components/MixShelf';
 import { Shelf } from '../../components/Shelf';
-import { WAVE_TEXTS } from '../../core/waveTexts';
+import { texts } from '../../settings/texts';
 import { currentItem } from '../../player/queue';
 import { usePlayerState } from '../../player/instance';
 import { theme } from '../../theme';
@@ -17,12 +18,12 @@ function PicksBar() {
   if (!list.length) return null;
   return (
     <View style={styles.picks}>
-      <Text style={styles.picksText}>{WAVE_TEXTS.ru.pickStart}: {list.length}</Text>
+      <Text style={styles.picksText}>{texts.pickStart}: {list.length}</Text>
       <Pressable style={styles.picksGo} onPress={() => { const seed = picks.take(); if (seed) void wave.start(seed); }}>
         <Text style={styles.waveText}>Включить</Text>
       </Pressable>
       <Pressable onPress={() => picks.clear()} hitSlop={12}>
-        <Text style={styles.link}>{WAVE_TEXTS.ru.pickClear}</Text>
+        <Text style={styles.link}>{texts.pickClear}</Text>
       </Pressable>
     </View>
   );
@@ -64,11 +65,9 @@ export default function Home() {
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>{state.status === 'in' ? state.session.user.username : 'SoundCloud Wave'}</Text>
-        {state.status === 'in' ? (
-          <Pressable onPress={() => void auth.signOut()} hitSlop={12}>
-            <Text style={styles.link}>Выйти</Text>
-          </Pressable>
-        ) : null}
+        <Pressable onPress={() => router.push('/settings')} hitSlop={12}>
+          <Text style={styles.link}>Настройки</Text>
+        </Pressable>
       </View>
       <RequireAuth>
         <Feed />

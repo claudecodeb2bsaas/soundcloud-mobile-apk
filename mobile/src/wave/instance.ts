@@ -1,4 +1,3 @@
-import Storage from 'expo-sqlite/kv-store';
 import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import type { Query } from '../api/client';
@@ -7,60 +6,23 @@ import { playlistOf, tracksOf } from '../api/soundcloud';
 import { auth } from '../auth/instance';
 import { COUNTED_MS } from '../core/historyTypes';
 import { installSources } from '../core/wave/sources';
-import { WAVE_TEXTS } from '../core/waveTexts';
 import type { WaveTrack } from '../core/waveTypes';
 import { player } from '../player/instance';
-import { expoDb } from '../store/db';
-import { createHistory } from '../store/history';
+import { settings } from '../settings/instance';
+import { createWebhook } from '../addons/webhook';
 import { createWave, type WaveApi } from './engine';
 import { createLibrary, type LibraryView } from './library';
-import { createLikes } from './likes';
-import { createMarks } from './marks';
+import { texts } from '../settings/texts';
+import { DAY, excluded, history, kv, likes, marks, radar, taste, userId } from './data';
 import { createPicks } from './picks';
 import { parsePresetMarks } from './presetMarks';
-import { createRadar } from './radar';
 import { createShelf, shelfInputsOf } from './shelf';
 import { createWaveSession, type WaveSessionState } from './session';
-import { createTaste, tasteLibraryOf } from './taste';
-import { createTasteOverrides } from './tasteOverrides';
 import { createTracker } from './tracker';
 
-// Один набор на приложение: история в SQLite, вкус, отметки, лайки, волна, «Моя музыка», запись прослушиваний
-
-const DAY = 86400000;
-const kv = (key: string) => ({
-    get: () => Storage.getItemSync(key),
-    set: (value: string) => Storage.setItemSync(key, value),
-});
-const userId = (): number | null => auth.getState().session?.user.id ?? null;
-
-// Раздел подборок SoundCloud и соседей хранит кэш в localStorage, которого в Hermes нет
-const shim = globalThis as unknown as { localStorage?: { getItem(key: string): string | null; setItem(key: string, value: string): void } };
-shim.localStorage ??= { getItem: (key) => Storage.getItemSync(key), setItem: (key, value) => Storage.setItemSync(key, value) };
-
-export const history = createHistory(expoDb);
-
-export const taste = createTaste({
-    history,
-    library: (user) => tasteLibraryOf(auth.sc, user),
-    overrides: createTasteOverrides(kv('wave.taste-overrides.v1')),
-});
-
-export const marks = createMarks(kv('wave.marks.v1'), (change) => {
-    const user = userId();
-    if (!user) return;
-    const at = Date.now();
-    const kind = change.kind;
-    const done = change.on
-        ? history.setMark(user, {
-            kind, id: change.id, at, artist: kind === 'artist' ? change.id : change.track?.user_id ?? change.track?.user?.id ?? 0,
-            genre: change.track?.genre ?? '', tags: change.track?.tag_list ?? '', title: change.track?.title ?? '', name: change.name,
-        })
-        : history.removeMark(user, kind, change.id);
-    void done.then(() => taste.invalidate(user), (error: unknown) => console.warn('Отметка не записана', error));
-});
-
-export const likes = createLikes({ sc: auth.sc, userId });
+// Один набор на приложение: история в SQLite, вкус, отметки, лайки, волна, «Моя музыка», запись прослушиваний.
+// Данные без плеера лежат в data.ts (их же берёт фоновый радар), здесь они только реэкспортируются.
+export { history, likes, marks, radar, taste };
 
 const sources = installSources({
     call: async (name, path, query) => (await auth.api.call(name as EndpointName, path as PathParams, query as Query)).body,
@@ -101,18 +63,13 @@ const api: WaveApi = {
     sources,
 };
 
-const excluded = () => {
-    const data = marks.getSnapshot();
-    return { tracks: new Set(Object.keys(data.tracks).map(Number)), artists: new Set(Object.keys(data.artists).map(Number)) };
-};
-
 // Отметки пресетов: ранние пропуски внутри настроения, переживают перезапуск
 const moods = kv('wave.moods.v1');
 let presetMarks = parsePresetMarks(moods.get());
 
 export const wave = createWaveSession({
     player,
-    texts: WAVE_TEXTS.ru,
+    texts,
     settings: kv('wave.settings.v1'),
     createWave: (settings, seed) =>
         createWave(api, {
@@ -143,7 +100,7 @@ export const library = createLibrary({
     },
 });
 
-// Подборки дня, радар релизов и набор из меню трека
+// Подборки дня и набор из меню трека
 export const shelf = createShelf({
     userId,
     likedTracks: () => auth.sc.likedTracks(1000),
@@ -157,27 +114,7 @@ export const shelf = createShelf({
     sources,
     excluded,
     store: kv('wave.shelf.v1'),
-    texts: WAVE_TEXTS.ru,
-});
-
-export const radar = createRadar({
-    userId,
-    follows: async (user) => (await auth.sc.followings(user, 200)).map((account) => account.id),
-    uploads: (account) => auth.sc.userTracks(account, 20, { background: true }),
-    tracksByIds: (ids) => auth.sc.tracksByIds(ids),
-    taste: async () => {
-        const user = userId();
-        return user ? taste.maps(user) : null;
-    },
-    heard: async () => {
-        const user = userId();
-        const ids = new Set<number>(likes.getSnapshot());
-        if (user) for (const id of await history.heardIds(user, Date.now() - 90 * DAY).catch(() => [])) ids.add(id);
-        return ids;
-    },
-    excluded,
-    store: kv('wave.radar.v1'),
-    texts: WAVE_TEXTS.ru,
+    texts,
 });
 
 export const picks = createPicks();
@@ -186,12 +123,17 @@ export function usePicks(): readonly WaveTrack[] {
     return useSyncExternalStore(picks.subscribe, picks.getSnapshot, picks.getSnapshot);
 }
 
-// Запись прослушиваний: ранние пропуски учат идущую волну, всё остальное идёт во вкус через журнал
+const webhook = createWebhook({ settings });
+
+// Запись прослушиваний: ранние пропуски учат идущую волну, всё остальное идёт во вкус через журнал.
+// Инкогнито: журнал и вкус не трогаются, волна учится в рамках сессии как обычно.
 const tracker = createTracker({
     player,
     user: userId,
+    incognito: () => settings.getSnapshot().incognito,
     record: (user, play) => history.add(user, play),
     onPlay: (play, item) => {
+        webhook.onPlay(play, item.track);
         if (!item.meta?.source.startsWith('wave:')) return;
         // Ранний пропуск человеком учит волну (признак серии, развилка, пресет); от 30 секунд серия пропусков прервана
         if (play.end === 'skip' && play.endedBy === 'user' && play.heard < COUNTED_MS) wave.feedback(item.track, -1, play.heard);
@@ -208,17 +150,18 @@ export function noteLiked(track: WaveTrack): void {
     if (user) taste.invalidate(user);
 }
 
-// Выход из аккаунта останавливает волну и забывает лайки; вход подгружает лайки для сердечек
-let signedIn = false;
+// Выход и смена аккаунта останавливают волну и забывают лайки; вход подгружает лайки для сердечек
+let signedAs: number | null = null;
 auth.subscribe(() => {
-    const now = auth.getState().status === 'in';
-    if (signedIn && !now) {
+    const now = auth.getState().session?.user.id ?? null;
+    if (now === signedAs) return;
+    if (signedAs !== null) {
         wave.stop();
         likes.reset();
         taste.invalidate();
     }
-    if (!signedIn && now) void likes.load().catch(() => undefined);
-    signedIn = now;
+    if (now !== null) void likes.load().catch(() => undefined);
+    signedAs = now;
 });
 
 export function useWave(): WaveSessionState {

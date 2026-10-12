@@ -6,7 +6,7 @@ import { createTracker } from './tracker';
 
 const track = (id: number): WaveTrack => ({ id, kind: 'track', title: 'T' + id, duration: 200000, user_id: 5, user: { id: 5, username: 'A' }, genre: 'g' });
 
-function setup(user: number | null = 1) {
+function setup(user: number | null = 1, incognito = false) {
   let queue: QueueState = emptyQueue();
   let status = 'idle';
   let ended = false;
@@ -22,7 +22,7 @@ function setup(user: number | null = 1) {
     getProgress: () => ({ position, duration }),
   };
   const tracker = createTracker({
-    player, now: () => time, user: () => user,
+    player, now: () => time, user: () => user, incognito: () => incognito,
     record: (_user, record) => { records.push(record); },
     onPlay: (record, item) => played.push(`${item.track.id}:${record.end}`),
   });
@@ -117,5 +117,15 @@ describe('журнал прослушиваний', () => {
     ctx.wait(8000);
     ctx.go(1, 48);
     expect(ctx.records[1]).toMatchObject({ id: 1, end: 'skip', likedNow: false, heard: 8000 });
+  });
+
+  it('инкогнито: журнал молчит, onPlay всё равно зовётся', () => {
+    const ctx = setup(1, true);
+    ctx.load([1, 2]);
+    ctx.set('playing');
+    ctx.wait(12000);
+    ctx.go(1, 12);
+    expect(ctx.records).toEqual([]);
+    expect(ctx.played).toEqual(['1:skip']);
   });
 });

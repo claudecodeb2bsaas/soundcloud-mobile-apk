@@ -16,14 +16,28 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.POST_NOTIFICATIONS"]
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "plugins": [
       "expo-router",
       "expo-status-bar",
       "expo-secure-store",
-      ["expo-audio", { "enableBackgroundPlayback": true, "enableBackgroundRecording": false, "recordAudioAndroid": false, "microphonePermission": false }],
-      "expo-sqlite"
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false,
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-sqlite",
+      "expo-notifications",
+      "./plugins/withReleaseSigning",
+      "expo-background-task",
+      "expo-asset"
     ]
   }
 }

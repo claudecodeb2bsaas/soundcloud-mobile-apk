@@ -1,19 +1,42 @@
 name: Android APK
 
+# Обычная сборка: APK в Artifacts, подписан отладочным ключом.
+# Релиз: тег mobile-vX.Y.Z (git tag mobile-v0.1.0 && git push origin mobile-v0.1.0). Нужны секреты репозитория
+# ANDROID_KEYSTORE_BASE64 (base64 от .jks), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
+# Перед тегом поднять version и android.versionCode в mobile/app.json.
 on:
   push:
     branches: [main]
+    tags: ['mobile-v*']
     paths: ['mobile/**', '.github/workflows/android-apk.yml']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     defaults:
       run:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+      - name: Release needs a signing key
+        if: startsWith(github.ref, 'refs/tags/mobile-v') && env.KEYSTORE_B64 == ''
+        run: |
+          echo "::error::Secret ANDROID_KEYSTORE_BASE64 is not set, a release APK cannot be signed"
+          exit 1
+      - name: Decode signing key
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -34,3 +57,9 @@ jobs:
         with:
           name: soundcloud-wave-apk
           path: mobile/android/app/build/outputs/apk/release/*.apk
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/mobile-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mobile/android/app/build/outputs/apk/release/*.apk
+          generate_release_notes: true

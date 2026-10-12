@@ -176,14 +176,14 @@ describe('свой вкус в пресете', () => {
     // Порядок взвешенно случайный: по многим волнам наказанные аккаунты в среднем стоят позже остальных
     const position = async (marks: boolean): Promise<number> => {
       let total = 0;
-      for (let run = 0; run < 60; run++) {
+      for (let run = 0; run < 300; run++) {
         const wave = createWave(fakeApi({ related: async () => tracks, taste: async () => maps({}) }), {
           mode: 'similar', preset: 'calm', presetMarks: marks ? { calm: { a: { 7000: 2, 7001: 2 }, t: {} } } : {},
         });
         const order = (await wave.next(6)).map((item) => item.track.user_id);
         total += order.indexOf(7000) + order.indexOf(7001);
       }
-      return total / 60 / 2;
+      return total / 300 / 2;
     };
     expect(await position(true)).toBeGreaterThan((await position(false)) + 0.5);
   });

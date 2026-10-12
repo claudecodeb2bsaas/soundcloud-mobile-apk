@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { RequireAuth } from '../../components/Loadable';
 import { MyMusic } from '../../components/MyMusic';
 import type { WaveMood } from '../../core/waveMood';
-import { WAVE_TEXTS } from '../../core/waveTexts';
+import { texts } from '../../settings/texts';
 import { theme } from '../../theme';
 import { wave, useWave } from '../../wave/instance';
 
@@ -14,7 +14,7 @@ const MODES = [
   { id: 'fresh', label: 'Новое', hint: 'Ещё не слышанное и не лайкнутое, больше новых артистов' },
 ] as const;
 
-const T = WAVE_TEXTS.ru;
+const T = texts;
 const PRESETS: Array<{ id: WaveMood | ''; label: string }> = [
   { id: '', label: 'Любое' },
   { id: 'happy', label: T.moodHappy },

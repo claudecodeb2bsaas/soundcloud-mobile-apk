@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WAVE_TEXTS } from '../core/waveTexts';
+import { texts } from '../settings/texts';
 import { theme } from '../theme';
 import { useWave, wave } from '../wave/instance';
 
-const T = WAVE_TEXTS.ru;
+const T = texts;
 const NOTICE_MS = 8000;
 
 /** Подсказки волны: «Меньше такого в этой волне» с отменой (П7) и развилка «Куда дальше?» после трёх быстрых пропусков (П8) */

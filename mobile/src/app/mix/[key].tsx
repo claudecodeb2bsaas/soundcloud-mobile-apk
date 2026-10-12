@@ -3,7 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Loadable, RequireAuth } from '../../components/Loadable';
 import { TrackRow } from '../../components/TrackRow';
-import { WAVE_TEXTS } from '../../core/waveTexts';
+import { texts } from '../../settings/texts';
 import { usePlayerState } from '../../player/instance';
 import { currentItem } from '../../player/queue';
 import { theme } from '../../theme';
@@ -11,7 +11,7 @@ import { useLoad } from '../../ui/useLoad';
 import { shelf, wave } from '../../wave/instance';
 import { cardSub } from '../../wave/shelf';
 
-const T = WAVE_TEXTS.ru;
+const T = texts;
 
 function Mix({ cardKey }: { cardKey: string }) {
   const playing = currentItem(usePlayerState().queue)?.track.id;

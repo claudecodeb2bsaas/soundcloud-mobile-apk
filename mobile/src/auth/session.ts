@@ -75,6 +75,46 @@ export async function clearSession(store: KeyValueStore): Promise<void> {
     await store.remove(KEY);
 }
 
+// Сохранённые аккаунты: у каждого своя запись (значения SecureStore небольшие), номера лежат в списке. Активный
+// вход по-прежнему в KEY, список нужен только для переключения.
+export const MAX_ACCOUNTS = 5;
+const INDEX = 'sc.accounts.v1';
+const accountKey = (id: number): string => `sc.account.${id}`;
+
+async function accountIds(store: KeyValueStore): Promise<number[]> {
+    try {
+        const raw = JSON.parse((await store.get(INDEX)) ?? '[]') as unknown;
+        return Array.isArray(raw) ? raw.filter((id): id is number => Number.isSafeInteger(id) && id > 0).slice(0, MAX_ACCOUNTS) : [];
+    } catch {
+        return [];
+    }
+}
+
+export async function loadAccounts(store: KeyValueStore): Promise<Session[]> {
+    const found: Session[] = [];
+    for (const id of await accountIds(store)) {
+        const session = parseSession(await store.get(accountKey(id)));
+        if (session && session.user.id === id) found.push(session);
+    }
+    return found;
+}
+
+/** Новый аккаунт сверх предела не сохраняется: ошибка, список не меняется */
+export async function saveAccount(store: KeyValueStore, session: Session): Promise<void> {
+    const ids = await accountIds(store);
+    const id = session.user.id;
+    if (!ids.includes(id)) {
+        if (ids.length >= MAX_ACCOUNTS) throw new Error(`Не больше ${MAX_ACCOUNTS} аккаунтов: выйди из одного из них`);
+        await store.set(INDEX, JSON.stringify([...ids, id]));
+    }
+    await store.set(accountKey(id), JSON.stringify(session));
+}
+
+export async function removeAccount(store: KeyValueStore, id: number): Promise<void> {
+    await store.set(INDEX, JSON.stringify((await accountIds(store)).filter((item) => item !== id)));
+    await store.remove(accountKey(id));
+}
+
 /**
  * Проверка токена запросом /me. Отказ входа (401, 403) значит, что токен негодный: возвращается null.
  * Прочие сбои (сеть, 429, сервер) пробрасываются: токен мог быть хорошим, решать вызывающему.

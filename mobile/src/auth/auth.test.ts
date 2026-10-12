@@ -3,6 +3,7 @@ import { createAuth } from './auth';
 import type { KeyValueStore } from './session';
 
 const TOKEN = '2-293950-123456-AbCdEf';
+const TOKEN2 = '2-293950-654321-ZyXwVu';
 const CID = 'AbCdEfGh12345678AbCdEfGh12345678';
 const PAGE = `{"hydratable":"apiClient","data":{"id":"${CID}","isExpiring":false}}`;
 
@@ -21,9 +22,10 @@ function site(options: { me?: number } = {}) {
     const headers = init?.headers as Record<string, string>;
     if (url.pathname === '/me') {
       if (options.me) return new Response('', { status: options.me });
-      return headers.Authorization === `OAuth ${TOKEN}` && url.searchParams.get('client_id') === CID
-        ? new Response(JSON.stringify({ id: 77, username: 'dj', permalink: 'dj', avatar_url: null }), { status: 200 })
-        : new Response('', { status: 401 });
+      if (url.searchParams.get('client_id') !== CID) return new Response('', { status: 401 });
+      if (headers.Authorization === `OAuth ${TOKEN}`) return new Response(JSON.stringify({ id: 77, username: 'dj', permalink: 'dj', avatar_url: null }), { status: 200 });
+      if (headers.Authorization === `OAuth ${TOKEN2}`) return new Response(JSON.stringify({ id: 88, username: 'mc', permalink: 'mc', avatar_url: null }), { status: 200 });
+      return new Response('', { status: 401 });
     }
     return new Response('{}', { status: 200 });
   }) as unknown as typeof fetch;
@@ -87,5 +89,57 @@ describe('вход', () => {
     await auth.signOut();
     expect(auth.getState()).toEqual({ status: 'out', session: null });
     expect(await store.get('sc.session.v1')).toBeNull();
+  });
+});
+
+describe('аккаунты', () => {
+  it('вход запоминает аккаунты, переключение проверяет токен и меняет сессию', async () => {
+    const store = memory();
+    const auth = createAuth({ store, fetch: site().fake });
+    await auth.signInWithToken(TOKEN, CID);
+    await auth.signInWithToken(TOKEN2, CID);
+    expect((await auth.accounts()).map((account) => account.user.username)).toEqual(['dj', 'mc']);
+    expect(auth.getState().session?.user.id).toBe(88);
+
+    await auth.switchTo(77);
+    expect(auth.getState().session?.user.id).toBe(77);
+    // После перезапуска активен тот, на который переключились
+    const again = createAuth({ store, fetch: site().fake });
+    await again.init();
+    expect(again.getState().session?.user.id).toBe(77);
+    await expect(auth.switchTo(5)).rejects.toThrow('не найден');
+  });
+
+  it('выход забывает только текущий аккаунт, вход, сохранённый раньше списка, попадает в список', async () => {
+    const store = memory();
+    const auth = createAuth({ store, fetch: site().fake });
+    await auth.signInWithToken(TOKEN, CID);
+    await auth.signInWithToken(TOKEN2, CID);
+    await auth.signOut();
+    expect((await auth.accounts()).map((account) => account.user.id)).toEqual([77]);
+    expect(auth.getState().status).toBe('out');
+
+    const old = memory();
+    await old.set('sc.session.v1', JSON.stringify({ token: TOKEN, clientId: CID, user: { id: 77, username: 'dj' }, savedAt: 1 }));
+    const migrated = createAuth({ store: old, fetch: site().fake });
+    await migrated.init();
+    expect((await migrated.accounts()).map((account) => account.user.id)).toEqual([77]);
+  });
+
+  it('больше пяти аккаунтов не сохраняется, состояние не меняется; негодный токен при переключении', async () => {
+    const store = memory();
+    await store.set('sc.accounts.v1', JSON.stringify([1, 2, 3, 4, 5]));
+    const auth = createAuth({ store, fetch: site().fake });
+    await expect(auth.signInWithToken(TOKEN, CID)).rejects.toThrow('Не больше 5');
+    expect(auth.getState().status).not.toBe('in');
+    expect(await store.get('sc.session.v1')).toBeNull();
+
+    const stale = memory();
+    const other = createAuth({ store: stale, fetch: site().fake });
+    await other.signInWithToken(TOKEN, CID);
+    await stale.set('sc.account.88', JSON.stringify({ token: '2-000000-000000-WrongToken', clientId: CID, user: { id: 88, username: 'mc' }, savedAt: 1 }));
+    await stale.set('sc.accounts.v1', JSON.stringify([77, 88]));
+    await expect(other.switchTo(88)).rejects.toThrow(/не принял/);
+    expect(other.getState().session?.user.id).toBe(77);
   });
 });

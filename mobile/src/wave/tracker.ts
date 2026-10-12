@@ -13,7 +13,9 @@ export interface TrackerDeps {
     player: Pick<PlayerController, 'getState' | 'subscribe' | 'getProgress'>;
     user(): number | null;
     record(user: number, play: PlayRecord): void | Promise<void>;
-    /** Прослушивание записано: волна учится на ранних пропусках и дослушиваниях */
+    /** Инкогнито: прослушивание в журнал не пишется, onPlay всё равно зовётся (волна учится в рамках сессии) */
+    incognito?(): boolean;
+    /** Прослушивание закрыто: волна учится на ранних пропусках и дослушиваниях, вебхук смотрит на долю */
     onPlay?(play: PlayRecord, item: QueueItem): void;
     now?(): number;
 }
@@ -51,10 +53,12 @@ export function createTracker(deps: TrackerDeps): Tracker {
             genre: track.genre ?? '', tags: track.tag_list ?? '', title: track.title ?? '', artistName: track.user?.username ?? '',
             path: track.permalink_url?.replace('https://soundcloud.com', '') ?? '', artwork: track.artwork_url ?? '',
         };
-        try {
-            void Promise.resolve(deps.record(user, record)).catch((error: unknown) => console.warn('Прослушивание не записано', error));
-        } catch (error) {
-            console.warn('Прослушивание не записано', error);
+        if (!deps.incognito?.()) {
+            try {
+                void Promise.resolve(deps.record(user, record)).catch((error: unknown) => console.warn('Прослушивание не записано', error));
+            } catch (error) {
+                console.warn('Прослушивание не записано', error);
+            }
         }
         deps.onPlay?.(record, item);
     }

@@ -4,13 +4,14 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Loadable, RequireAuth } from '../components/Loadable';
 import type { RadarItem } from '../core/radar';
-import { fillText, WAVE_TEXTS } from '../core/waveTexts';
+import { fillText } from '../core/waveTexts';
+import { texts } from '../settings/texts';
 import { theme } from '../theme';
 import { useLoad } from '../ui/useLoad';
 import { radar, wave } from '../wave/instance';
 import { radarReason, type RadarView } from '../wave/radar';
 
-const T = WAVE_TEXTS.ru;
+const T = texts;
 const day = (at: number): string => {
   const date = new Date(at);
   return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;

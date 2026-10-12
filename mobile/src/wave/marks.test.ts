@@ -25,6 +25,16 @@ describe('отметки волны', () => {
     expect(marks.hasTrack(5)).toBe(false);
   });
 
+  it('remove снимает отметку по номеру и сообщает об этом, чужой номер игнорирует', () => {
+    const changes: string[] = [];
+    const marks = createMarks(memory(), (change) => changes.push(`${change.kind}:${change.id}:${change.on}`));
+    marks.toggleArtist(9, 'Bob');
+    marks.remove('track', 9);
+    marks.remove('artist', 9);
+    expect(marks.hasArtist(9)).toBe(false);
+    expect(changes).toEqual(['artist:9:true', 'artist:9:false']);
+  });
+
   it('снимок меняется при правке, а испорченное хранилище читается пустым', () => {
     const marks = createMarks(memory('{{'));
     const before = marks.getSnapshot();

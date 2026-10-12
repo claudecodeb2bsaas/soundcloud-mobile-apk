@@ -21,14 +21,16 @@ export const player = createPlayerController({
 });
 
 // Выход из аккаунта останавливает звук и стирает сохранённую очередь
-let signedIn = false;
+let signedAs: number | null = null;
 auth.subscribe(() => {
-    const now = auth.getState().status === 'in';
-    if (signedIn && !now) {
+    const now = auth.getState().session?.user.id ?? null;
+    if (now === signedAs) return;
+    // Выход или переключение на другой аккаунт: очередь прежнего не остаётся
+    if (signedAs !== null) {
         player.clear();
         void Storage.removeItem(SESSION_KEY);
     }
-    signedIn = now;
+    signedAs = now;
 });
 
 export function usePlayerState(): PlayerState {
