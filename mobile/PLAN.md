@@ -28,6 +28,19 @@ desktop-клиента (`../src/services`), чистые модули копир
 8. Настройки и «аддоны»: язык, аккаунты, инкогнито, вебхуки, резервная копия, диагностика.
 9. Полировка: плавный переход, DRM-треки, Android Auto, подпись APK, релиз.
 
+## Статус
+
+- Этап 0: готов.
+- Этап 1: готов. В `src/core` скопированы без правок логики: `waveTypes`, `trackIdentity`, `waveGenres`, `waveMood`,
+  `waveLinks`, `wavePicks`, `waveTaste`, `waveTexts`, `tasteParams`, `libraryMix`, `pageSources`, `wave/sources`
+  и их тесты (93 теста). `src/core/wave.ts` это фасад с теми же реэкспортами, что у desktop-файла `wave.ts`.
+  Правки относительно desktop: типы `WaveTrack` в `trackIdentity` берутся из `waveTypes`, путь фикстуры в тесте.
+  Синхронизация с desktop пока ручная; общий пакет вынесем позже.
+  Не перенесено сознательно: `radar`, `radarSchedule`, `tasteModel`, `historyIndex`, `recommendStore` (нужно хранилище,
+  этапы 6–7), `wave/quiet` (этап 9), всё, что работает с DOM страницы.
+- Проверить на устройстве (Hermes): регулярки `\p{L}`, `\p{Script=Cyrillic}` в `waveGenres` и `trackIdentity`,
+  `Intl.PluralRules` в `waveTexts`.
+
 ## Риски
 
 - api-v2 не документирован, `client_id` меняется, возможны 429.
