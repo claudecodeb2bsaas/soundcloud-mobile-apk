@@ -36,6 +36,12 @@ describe('скрипт страницы входа', () => {
     expect(page().result).toBe(true);
   });
 
+  it('ловит токен из заголовка fetch к api-mobile', async () => {
+    const { sandbox, posted } = page();
+    await (sandbox.fetch as (u: string, i: object) => Promise<unknown>)(`https://api-mobile.soundcloud.com/me?client_id=${CID}`, { headers: { Authorization: `OAuth ${TOKEN}` } });
+    expect(parseLoginMessage(posted[0])).toEqual({ token: TOKEN, clientId: CID });
+  });
+
   it('ловит токен из заголовка fetch к api-v2 и client_id из адреса', async () => {
     const { sandbox, posted } = page();
     await (sandbox.fetch as (u: string, i: object) => Promise<unknown>)(`https://api-v2.soundcloud.com/me?client_id=${CID}`, { headers: { Authorization: `OAuth ${TOKEN}` } });

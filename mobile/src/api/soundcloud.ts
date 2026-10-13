@@ -257,7 +257,14 @@ export function createSoundCloud(api: ApiClient) {
 
         /** Поставить или снять лайк трека; без входа или с чужим user_id сайт ответит 401/403 */
         async setLike(userId: number, trackId: number, liked: boolean, options?: CallOptions): Promise<void> {
-            await api.call('trackLike', { user_id: userId, track_id: trackId }, {}, { ...options, method: liked ? 'PUT' : 'DELETE' });
+            const call = { ...options, method: liked ? 'PUT' : 'DELETE' } as const;
+            try {
+                await api.call('trackLike', { user_id: userId, track_id: trackId }, {}, call);
+            } catch (error) {
+                const status = (error as { status?: number } | null)?.status;
+                if (status !== 401 && status !== 403 && status !== 404) throw error;
+                await api.call('meTrackLike', { track_id: trackId }, {}, call);
+            }
         },
 
         /** Страница жанра: свежие загрузки по метке (recent) или поиск по жанру и меткам (search); query это next прошлой страницы */

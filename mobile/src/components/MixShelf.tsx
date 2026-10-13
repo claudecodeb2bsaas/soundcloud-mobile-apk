@@ -62,17 +62,17 @@ export function MixShelf() {
 const SIZE = 140;
 const styles = StyleSheet.create({
   root: { marginBottom: 20 },
-  heading: { color: theme.text, fontSize: 18, fontWeight: '700', paddingHorizontal: 16, marginBottom: 10 },
-  list: { paddingHorizontal: 16, gap: 12 },
+  heading: { color: theme.text, fontSize: 20, fontWeight: '800', paddingHorizontal: 16, marginBottom: 12 },
+  list: { paddingHorizontal: 16, gap: 14 },
   wait: { width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' },
   card: { width: SIZE, gap: 2 },
-  art: { width: SIZE, height: SIZE, borderRadius: 6, overflow: 'hidden', marginBottom: 6, justifyContent: 'flex-end' },
+  art: { width: SIZE, height: SIZE, borderRadius: 18, overflow: 'hidden', marginBottom: 8, justifyContent: 'flex-end' },
   quad: { ...StyleSheet.absoluteFill, flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: SIZE / 2, height: SIZE / 2 },
   single: { ...StyleSheet.absoluteFill },
   // Коллаж обесцвечен тоном группы, как на desktop: название читается поверх любой обложки
   tint: { ...StyleSheet.absoluteFill, opacity: 0.72 },
   face: { color: '#fff', fontSize: 16, fontWeight: '800', padding: 10 },
-  title: { color: theme.text, fontSize: 14, fontWeight: '500' },
+  title: { color: theme.text, fontSize: 14, fontWeight: '600' },
   muted: { color: theme.muted, fontSize: 12 },
 });

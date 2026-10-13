@@ -5,6 +5,8 @@ import { auth } from '../auth/instance';
 import { Loadable } from '../components/Loadable';
 import { artwork } from '../player/format';
 import { theme } from '../theme';
+import { Icon } from '../ui/Icon';
+import { ScreenHeader } from '../ui/kit';
 import { useLoad } from '../ui/useLoad';
 
 /** Чарты сайта: подборки по странам, в каждой плейлисты по жанрам. Состав открывается как обычный плейлист */
@@ -12,10 +14,7 @@ export default function Charts() {
   const { data, error, reload } = useLoad(() => auth.sc.charts(), []);
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-        <Text style={styles.link}>Назад</Text>
-      </Pressable>
-      <Text style={styles.title}>Чарты</Text>
+      <ScreenHeader title="Чарты" />
       <Loadable ready={!!data} error={error} onRetry={reload}>
         <ScrollView contentContainerStyle={styles.content}>
           {data?.map((section) => (
@@ -25,7 +24,7 @@ export default function Charts() {
                 const cover = artwork(list.artwork);
                 return (
                   <Pressable key={list.id} style={styles.row} onPress={() => router.push(`/playlist/${list.id}`)}>
-                    {cover ? <Image source={{ uri: cover }} style={styles.cover} /> : <View style={styles.cover} />}
+                    {cover ? <Image source={{ uri: cover }} style={styles.cover} /> : <View style={[styles.cover, styles.noCover]}><Icon name="music" size={22} color={theme.muted} /></View>}
                     <View style={styles.meta}>
                       <Text style={styles.name} numberOfLines={1}>{list.title}</Text>
                       <Text style={styles.muted}>{list.count} треков</Text>
@@ -44,15 +43,13 @@ export default function Charts() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  back: { paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-start' },
-  link: { color: theme.accent, fontSize: 15 },
-  title: { color: theme.text, fontSize: 22, fontWeight: '700', paddingHorizontal: 16, paddingBottom: 8 },
   content: { paddingBottom: 24 },
-  heading: { color: theme.text, fontSize: 18, fontWeight: '700', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  heading: { color: theme.text, fontSize: 20, fontWeight: '800', paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 12 },
-  cover: { width: 52, height: 52, borderRadius: 4, backgroundColor: theme.surface },
+  cover: { width: 56, height: 56, borderRadius: 14, backgroundColor: theme.surface },
+  noCover: { alignItems: 'center', justifyContent: 'center' },
   meta: { flex: 1, gap: 2 },
-  name: { color: theme.text, fontSize: 15, fontWeight: '500' },
+  name: { color: theme.text, fontSize: 15, fontWeight: '600' },
   muted: { color: theme.muted, fontSize: 13 },
   pad: { padding: 24, textAlign: 'center' },
 });

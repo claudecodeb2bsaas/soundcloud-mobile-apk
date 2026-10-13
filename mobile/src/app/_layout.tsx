@@ -11,6 +11,7 @@ import { onMediaControl, player } from '../player/instance';
 import { currentItem } from '../player/queue';
 import { useSettings } from '../settings/instance';
 import { theme } from '../theme';
+import { FeedbackHost } from '../ui/feedback';
 import { checkRadar, syncRadarTask } from '../background';
 
 /** Нажатие на уведомление открывает экран из data.url (радар) */
@@ -70,6 +71,7 @@ export default function RootLayout() {
       <WaveOverlay />
       <MiniPlayer />
       <TrackMenuHost />
+      <FeedbackHost />
     </View>
   );
 }

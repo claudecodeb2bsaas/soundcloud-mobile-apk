@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { LibraryMode } from '../core/libraryMix';
 import { theme } from '../theme';
+import { Icon } from '../ui/Icon';
+import { toast } from '../ui/feedback';
+import { Button, Chip } from '../ui/kit';
 import { useLoad } from '../ui/useLoad';
 import { library, useLibrary, wave } from '../wave/instance';
 import { Loadable } from './Loadable';
@@ -23,7 +26,7 @@ export function MyMusic() {
     try {
       await wave.start(await library.seed({ likes: 'Лайки' }));
     } catch (e) {
-      Alert.alert('Не удалось собрать музыку', e instanceof Error ? e.message : '');
+      toast(e instanceof Error && e.message ? e.message : 'Не удалось собрать музыку', 'music');
     } finally {
       setBusy(false);
     }
@@ -33,11 +36,7 @@ export function MyMusic() {
     <View style={styles.root}>
       <Text style={styles.heading}>Моя музыка</Text>
       <View style={styles.row}>
-        {MODES.map((mode) => (
-          <Pressable key={mode.id} onPress={() => library.setMode(mode.id)} style={[styles.chip, view.mode === mode.id && styles.chipOn]}>
-            <Text style={[styles.chipText, view.mode === mode.id && styles.chipTextOn]}>{mode.label}</Text>
-          </Pressable>
-        ))}
+        {MODES.map((mode) => <Chip key={mode.id} label={mode.label} on={view.mode === mode.id} onPress={() => library.setMode(mode.id)} />)}
       </View>
       <Text style={styles.muted}>{MODES.find((mode) => mode.id === view.mode)?.hint}</Text>
 
@@ -46,38 +45,30 @@ export function MyMusic() {
           {data?.map((source) => {
             const on = view.pick.includes(source.key);
             return (
-              <Pressable key={source.key} onPress={() => library.toggleSource(source.key)} style={styles.source}>
-                <Text style={[styles.check, on && styles.checkOn]}>{on ? '☑' : '☐'}</Text>
+              <Pressable key={source.key} onPress={() => library.toggleSource(source.key)} style={styles.source} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
+                <View style={[styles.check, on && styles.checkOn]}>{on ? <Icon name="check" size={16} color="#fff" /> : null}</View>
                 <Text style={styles.sourceName} numberOfLines={1}>{source.key === 'likes' ? 'Лайки' : source.title}</Text>
-                {source.key !== 'likes' ? <Text style={styles.muted}>{source.count}</Text> : null}
+                {source.key !== 'likes' ? <Text style={styles.count}>{source.count}</Text> : null}
               </Pressable>
             );
           })}
         </View>
       </Loadable>
 
-      <Pressable style={[styles.main, !view.pick.length && styles.off]} onPress={() => void play()} disabled={busy || !view.pick.length}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.mainText}>Слушать мою музыку</Text>}
-      </Pressable>
+      <Button label="Слушать мою музыку" icon="play" onPress={() => void play()} busy={busy} disabled={!view.pick.length} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 10, marginTop: 28 },
-  heading: { color: theme.text, fontSize: 18, fontWeight: '700' },
+  root: { gap: 12, marginTop: 28 },
+  heading: { color: theme.text, fontSize: 20, fontWeight: '800' },
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  chip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 18, backgroundColor: theme.surface },
-  chipOn: { backgroundColor: theme.accent },
-  chipText: { color: theme.muted, fontSize: 14 },
-  chipTextOn: { color: '#fff', fontWeight: '600' },
-  muted: { color: theme.muted, fontSize: 13 },
-  sources: { gap: 2 },
-  source: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  check: { color: theme.muted, fontSize: 20 },
-  checkOn: { color: theme.accent },
+  muted: { color: theme.muted, fontSize: 13, lineHeight: 18 },
+  sources: { backgroundColor: theme.surface, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
+  source: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
+  check: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#ffffff40', alignItems: 'center', justifyContent: 'center' },
+  checkOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   sourceName: { color: theme.text, fontSize: 15, flex: 1 },
-  main: { backgroundColor: theme.accent, borderRadius: 28, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  off: { opacity: 0.4 },
-  mainText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  count: { color: theme.muted, fontSize: 13 },
 });

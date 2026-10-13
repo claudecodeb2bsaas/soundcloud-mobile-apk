@@ -45,7 +45,7 @@ export function ProgressBar({ onSeek, thin, times }: Props) {
         <View style={thin ? styles.trackThin : styles.track} pointerEvents="none">
           <View style={[styles.fill, { width: `${ratio * 100}%` }]} />
         </View>
-        {seekable && !thin ? <View pointerEvents="none" style={[styles.thumb, { left: `${ratio * 100}%` }]} /> : null}
+        {seekable && !thin ? <View pointerEvents="none" style={[styles.thumb, drag !== null && styles.thumbDrag, { left: `${ratio * 100}%` }]} /> : null}
       </View>
       {times ? (
         <View style={styles.times}>
@@ -58,12 +58,13 @@ export function ProgressBar({ onSeek, thin, times }: Props) {
 }
 
 const styles = StyleSheet.create({
-  touch: { height: 32, justifyContent: 'center' },
+  touch: { height: 28, justifyContent: 'center' },
   touchThin: { height: 2 },
-  track: { height: 4, borderRadius: 2, backgroundColor: '#ffffff26', overflow: 'hidden' },
-  trackThin: { height: 2, backgroundColor: '#ffffff26', overflow: 'hidden' },
+  track: { height: 5, borderRadius: 3, backgroundColor: '#ffffff26', overflow: 'hidden' },
+  trackThin: { height: 2, backgroundColor: '#ffffff1f', overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: theme.accent },
-  thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, marginLeft: -7, backgroundColor: theme.accent },
-  times: { flexDirection: 'row', justifyContent: 'space-between' },
-  time: { color: theme.muted, fontSize: 13 },
+  thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, marginLeft: -7, backgroundColor: '#fff', elevation: 3 },
+  thumbDrag: { width: 20, height: 20, borderRadius: 10, marginLeft: -10 },
+  times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  time: { color: theme.muted, fontSize: 13, fontWeight: '500' },
 });

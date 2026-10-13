@@ -1,10 +1,11 @@
 import { Tabs } from 'expo-router';
-import { Text, type ColorValue } from 'react-native';
+import type { ColorValue } from 'react-native';
 import { currentItem } from '../../player/queue';
 import { usePlayerState } from '../../player/instance';
 import { theme } from '../../theme';
+import { Icon, type IconName } from '../../ui/Icon';
 
-const icon = (glyph: string) => ({ color }: { color: ColorValue }) => <Text style={{ color, fontSize: 20 }}>{glyph}</Text>;
+const icon = (name: IconName) => ({ color }: { color: ColorValue }) => <Icon name={name} size={24} color={String(color)} />;
 
 export default function TabsLayout() {
   // Мини-плеер стоит под вкладками и сам занимает нижний отступ системы; без него отступ нужен вкладкам
@@ -16,17 +17,20 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: theme.bg },
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarStyle: {
-          backgroundColor: theme.surface,
-          borderTopColor: '#ffffff1f',
-          ...(miniPlayer ? { height: 52, paddingBottom: 4 } : null),
+          backgroundColor: theme.bg,
+          borderTopColor: theme.border,
+          borderTopWidth: 1,
+          elevation: 0,
+          ...(miniPlayer ? { height: 56, paddingBottom: 4 } : null),
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Главная', tabBarIcon: icon('⌂') }} />
-      <Tabs.Screen name="wave" options={{ title: 'Волна', tabBarIcon: icon('≋') }} />
-      <Tabs.Screen name="search" options={{ title: 'Поиск', tabBarIcon: icon('⌕') }} />
-      <Tabs.Screen name="library" options={{ title: 'Библиотека', tabBarIcon: icon('♫') }} />
+      <Tabs.Screen name="index" options={{ title: 'Главная', tabBarIcon: icon('home') }} />
+      <Tabs.Screen name="wave" options={{ title: 'Волна', tabBarIcon: icon('wave') }} />
+      <Tabs.Screen name="search" options={{ title: 'Поиск', tabBarIcon: icon('search') }} />
+      <Tabs.Screen name="library" options={{ title: 'Библиотека', tabBarIcon: icon('library') }} />
     </Tabs>
   );
 }

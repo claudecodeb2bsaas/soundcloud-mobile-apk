@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +6,7 @@ import type { RadarItem } from '../core/radar';
 import { fillText } from '../core/waveTexts';
 import { texts } from '../settings/texts';
 import { theme } from '../theme';
+import { Button, ScreenHeader } from '../ui/kit';
 import { useLoad } from '../ui/useLoad';
 import { radar, wave } from '../wave/instance';
 import { radarReason, type RadarView } from '../wave/radar';
@@ -42,9 +42,7 @@ function Edition({ view, onRebuild }: { view: RadarView; onRebuild: () => void }
         <Text style={[styles.link, styles.rebuild]}>{T.radarRebuild}</Text>
       </Pressable>
       {items.length ? (
-        <Pressable style={styles.button} onPress={() => play()}>
-          <Text style={styles.buttonText}>{T.mixPlay}</Text>
-        </Pressable>
+        <View style={styles.button}><Button label={T.mixPlay} icon="play" onPress={() => play()} /></View>
       ) : <Text style={[styles.muted, styles.pad]}>За неделю новых релизов не нашлось</Text>}
       {items.map((item) => <Row key={item.id} item={item} onPress={() => play(item.id)} />)}
       {posts.length ? <Text style={styles.heading}>{T.radarUploads}</Text> : null}
@@ -70,12 +68,7 @@ function Radar() {
 export default function RadarScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <View style={styles.bar}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={styles.link}>Назад</Text>
-        </Pressable>
-      </View>
-      <Text style={styles.screenTitle}>{T.radar}</Text>
+      <ScreenHeader title={T.radar} />
       <RequireAuth>
         <Radar />
       </RequireAuth>
@@ -85,20 +78,17 @@ export default function RadarScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  bar: { paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-start' },
   link: { color: theme.accent, fontSize: 15 },
   rebuild: { paddingHorizontal: 16, paddingTop: 4 },
-  screenTitle: { color: theme.text, fontSize: 22, fontWeight: '700', paddingHorizontal: 16, paddingBottom: 8 },
   content: { paddingBottom: 24 },
   pad: { padding: 24 },
   muted: { color: theme.muted, fontSize: 13, paddingHorizontal: 16 },
   hint: { color: theme.muted, fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
-  heading: { color: theme.text, fontSize: 18, fontWeight: '700', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4 },
-  button: { backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 10, alignSelf: 'center', paddingHorizontal: 32, marginVertical: 12 },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  row: { paddingHorizontal: 16, paddingVertical: 8 },
+  heading: { color: theme.text, fontSize: 20, fontWeight: '800', paddingHorizontal: 16, paddingTop: 22, paddingBottom: 4 },
+  button: { alignSelf: 'center', marginVertical: 14 },
+  row: { paddingHorizontal: 16, paddingVertical: 10 },
   meta: { gap: 2 },
-  title: { color: theme.text, fontSize: 15, fontWeight: '500' },
+  title: { color: theme.text, fontSize: 15, fontWeight: '600' },
   heard: { color: theme.muted },
   reason: { color: theme.accent, fontSize: 12 },
 });

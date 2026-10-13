@@ -10,6 +10,8 @@ import type { WaveTrack } from '../../core/waveTypes';
 import { player, usePlayerState } from '../../player/instance';
 import { currentItem } from '../../player/queue';
 import { theme } from '../../theme';
+import { Icon } from '../../ui/Icon';
+import { Chip, IconButton } from '../../ui/kit';
 import { loadErrorText, useLoad } from '../../ui/useLoad';
 import { library } from '../../wave/instance';
 
@@ -104,8 +106,12 @@ function Playlists() {
         ListEmptyComponent={<Text style={styles.muted}>Плейлистов пока нет</Text>}
         renderItem={({ item }) => (
           <Pressable style={styles.list} onPress={() => router.push(`/playlist/${item.key.slice('playlist:'.length)}`)}>
-            <Text style={styles.listTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.listCount}>{item.count} треков</Text>
+            <View style={styles.listIcon}><Icon name="library" size={22} color={theme.accent} /></View>
+            <View style={styles.listText}>
+              <Text style={styles.listTitle} numberOfLines={1}>{item.title}</Text>
+              <Text style={styles.listCount}>{item.count} треков</Text>
+            </View>
+            <Icon name="chevronRight" size={22} color={theme.muted} />
           </Pressable>
         )}
       />
@@ -117,12 +123,13 @@ export default function Library() {
   const [tab, setTab] = useState<'likes' | 'history' | 'playlists'>('likes');
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Text style={styles.title}>Библиотека</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Библиотека</Text>
+        <IconButton icon="chart" label="Активность" bg={theme.surface} onPress={() => router.push('/activity')} />
+      </View>
       <View style={styles.tabs}>
         {(['likes', 'playlists', 'history'] as const).map((id) => (
-          <Pressable key={id} onPress={() => setTab(id)} style={[styles.tab, tab === id && styles.tabOn]}>
-            <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>{id === 'likes' ? 'Лайки' : id === 'playlists' ? 'Плейлисты' : 'История'}</Text>
-          </Pressable>
+          <Chip key={id} label={id === 'likes' ? 'Лайки' : id === 'playlists' ? 'Плейлисты' : 'История'} on={tab === id} onPress={() => setTab(id)} />
         ))}
       </View>
       <RequireAuth>{tab === 'likes' ? <Likes /> : tab === 'playlists' ? <Playlists /> : <History />}</RequireAuth>
@@ -132,15 +139,14 @@ export default function Library() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  title: { color: theme.text, fontSize: 22, fontWeight: '700', paddingHorizontal: 16, paddingVertical: 12 },
-  tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  tab: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: 16, backgroundColor: theme.surface },
-  tabOn: { backgroundColor: theme.accent },
-  tabText: { color: theme.muted, fontSize: 14 },
-  tabTextOn: { color: '#fff', fontWeight: '600' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
+  title: { color: theme.text, fontSize: 28, fontWeight: '800' },
+  tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
   muted: { color: theme.muted, fontSize: 13, textAlign: 'center', padding: 24 },
   footer: { padding: 16 },
-  list: { paddingHorizontal: 16, paddingVertical: 12, gap: 2 },
-  listTitle: { color: theme.text, fontSize: 15, fontWeight: '500' },
+  list: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 10 },
+  listIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  listText: { flex: 1, gap: 2 },
+  listTitle: { color: theme.text, fontSize: 15, fontWeight: '600' },
   listCount: { color: theme.muted, fontSize: 13 },
 });

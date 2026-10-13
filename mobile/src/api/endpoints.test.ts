@@ -10,6 +10,7 @@ describe('конечные точки api-v2', () => {
     expect(endpointPath('user', { id: 7 })).toBe('/users/7');
     expect(endpointPath('trackCategory', { id: 5, category: 'likers' })).toBe('/tracks/5/likers');
     expect(endpointPath('trackLike', { user_id: 3, track_id: 9 })).toBe('/users/3/track_likes/9');
+    expect(endpointPath('meTrackLike', { track_id: 9 })).toBe('/me/track_likes/9');
     expect(endpointPath('userToptracks', { id: 7 })).toBe('/users/7/toptracks');
     expect(endpointPath('chartSelections')).toBe('/charts/selections');
     expect(endpointPath('recentTracks', { tag: 'drum & bass' })).toBe('/recent-tracks/drum%20%26%20bass');

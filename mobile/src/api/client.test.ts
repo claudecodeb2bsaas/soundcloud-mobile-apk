@@ -5,13 +5,14 @@ import { ApiError, createApiClient, type ApiAuth } from './client';
 interface Call {
   url: URL;
   headers: Record<string, string>;
+  body?: string;
 }
 
 function setup(responses: Array<{ status: number; body?: unknown; headers?: Record<string, string> } | Error>, auth: ApiAuth, refresh?: () => Promise<string | null>) {
   const calls: Call[] = [];
   let i = 0;
   const fake = (async (url: string, init?: RequestInit) => {
-    calls.push({ url: new URL(url), headers: init?.headers as Record<string, string> });
+    calls.push({ url: new URL(url), headers: init?.headers as Record<string, string>, body: typeof init?.body === 'string' ? init.body : undefined });
     const next = responses[Math.min(i++, responses.length - 1)];
     if (next instanceof Error) throw next;
     return new Response(next.body === undefined ? '' : JSON.stringify(next.body), { status: next.status, headers: next.headers });
@@ -74,6 +75,20 @@ describe('клиент api-v2', () => {
     expect((await api.call('me')).body).toEqual({ id: 5 });
     expect(refreshed).toBe(1);
     expect(calls.map((call) => call.url.searchParams.get('client_id'))).toEqual(['OLD', 'NEW']);
+  });
+
+  it('лайк шлёт Origin и Referer сайта и после 403 повторяется с новым ключом; чтение при 403 не повторяется', async () => {
+    const put = setup([{ status: 403 }, { status: 200 }], { token: 'tok-1234567890', clientId: 'OLD' }, async () => 'NEW');
+    await put.api.call('trackLike', { user_id: 1, track_id: 2 }, {}, { method: 'PUT' });
+    expect(put.calls.map((call) => call.url.searchParams.get('client_id'))).toEqual(['OLD', 'NEW']);
+    expect(put.calls[0].headers.Origin).toBe('https://soundcloud.com');
+    expect(put.calls[0].headers['Content-Type']).toBe('application/json');
+    expect(put.calls[0].headers['X-Requested-With']).toBe('XMLHttpRequest');
+    expect(put.calls[0].body).toBe('{}');
+    const read = setup([{ status: 403 }], { token: 'tok-1234567890', clientId: 'OLD' }, async () => 'NEW');
+    await expect(read.api.call('me')).rejects.toBeInstanceOf(ApiError);
+    expect(read.calls).toHaveLength(1);
+    expect(read.calls[0].headers.Origin).toBeUndefined();
   });
 
   it('401 с тем же ключом после обновления остаётся отказом входа', async () => {

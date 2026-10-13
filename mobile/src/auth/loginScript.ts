@@ -1,8 +1,5 @@
-// Вход идёт в WebView на soundcloud.com/signin с User-Agent настольного браузера: сайт тогда работает на api-v2 и
-// OAuth-токене, как desktop-клиент. Скрипт ставится до загрузки страницы и ловит токен тремя способами:
-// заголовок Authorization в fetch и XHR запросах к api-v2 (надёжнее всего), cookie oauth_token и client_id из
-// window.__sc_hydration. Находку он отправляет сообщением в приложение.
-// Строка целиком выполняется в странице, поэтому без импортов и ссылок на модуль.
+// Вход в WebView на soundcloud.com/signin с мобильным Chrome UA (без «wv»). Скрипт ловит токен из
+// Authorization у api-v2 и api-mobile, cookie oauth_token и client_id из window.__sc_hydration.
 
 export const LOGIN_SCRIPT = `(function () {
   if (window.__scwHook) return;
@@ -31,7 +28,7 @@ export const LOGIN_SCRIPT = `(function () {
     window.fetch = function (input, init) {
       try {
         var url = typeof input === 'string' ? input : (input && input.url) || '';
-        if (url.indexOf('api-v2.soundcloud.com') > -1) {
+        if (/api(-v2|-mobile)?\\.soundcloud\\.com/.test(url)) {
           var h = (init && init.headers) || (input && input.headers);
           var auth = null;
           if (h) auth = typeof h.get === 'function' ? h.get('Authorization') : (h.Authorization || h.authorization);
@@ -48,7 +45,7 @@ export const LOGIN_SCRIPT = `(function () {
   };
   XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
     try {
-      if (/^authorization$/i.test(name) && String(this.__scwUrl).indexOf('api-v2.soundcloud.com') > -1) look(this.__scwUrl, value);
+      if (/^authorization$/i.test(name) && /api(-v2|-mobile)?\\.soundcloud\\.com/.test(String(this.__scwUrl))) look(this.__scwUrl, value);
     } catch (e) {}
     return setHeader.apply(this, arguments);
   };

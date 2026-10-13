@@ -71,11 +71,24 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     async function once(raw: string, query: Query, clientId: string | null, token: string | null, method = 'GET'): Promise<ApiResponse> {
         const headers: Record<string, string> = { Accept: 'application/json', 'User-Agent': DESKTOP_USER_AGENT };
         if (token) headers.Authorization = `OAuth ${token}`;
+        // Изменения (лайк) сайт принимает от браузера: те же Origin и Referer, что шлёт страница soundcloud.com
+        if (method !== 'GET') {
+            headers.Origin = 'https://soundcloud.com';
+            headers.Referer = 'https://soundcloud.com/';
+            headers['Accept-Language'] = 'en-US,en;q=0.9';
+            headers['Content-Type'] = 'application/json';
+            headers['X-Requested-With'] = 'XMLHttpRequest';
+        }
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         let response: Response;
         try {
-            response = await doFetch(buildUrl(raw, query, clientId), { method, headers, signal: controller.signal });
+            response = await doFetch(buildUrl(raw, query, clientId), {
+                method,
+                headers,
+                signal: controller.signal,
+                body: method === 'GET' ? undefined : '{}',
+            });
         } catch (error) {
             if (controller.signal.aborted) throw new Error(`Тайм-аут запроса ${timeoutMs} мс`);
             throw error;
@@ -100,8 +113,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         try {
             return await once(raw, query, clientId, token, method);
         } catch (error) {
-            // 401 с ключом сайта: ключ мог смениться. Обновляем один раз и повторяем; не помогло, значит отказ входа
-            if (error instanceof ApiError && error.status === 401 && options.refreshClientId) {
+            // 401 с ключом сайта: ключ мог смениться. Обновляем один раз и повторяем; не помогло, значит отказ входа.
+            // Изменение (лайк) сайт с устаревшим ключом отклоняет и кодом 403
+            const stale = error instanceof ApiError && (error.status === 401 || (error.status === 403 && !!method && method !== 'GET'));
+            if (stale && options.refreshClientId) {
                 const fresh = await options.refreshClientId().catch(() => null);
                 if (fresh && fresh !== clientId) {
                     clientId = fresh;

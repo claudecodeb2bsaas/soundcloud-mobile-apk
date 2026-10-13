@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Loadable, RequireAuth } from '../../components/Loadable';
@@ -7,6 +7,7 @@ import { texts } from '../../settings/texts';
 import { usePlayerState } from '../../player/instance';
 import { currentItem } from '../../player/queue';
 import { theme } from '../../theme';
+import { Button, ScreenHeader } from '../../ui/kit';
 import { useLoad } from '../../ui/useLoad';
 import { shelf, wave } from '../../wave/instance';
 import { cardSub } from '../../wave/shelf';
@@ -32,9 +33,7 @@ function Mix({ cardKey }: { cardKey: string }) {
             <View style={styles.head}>
               <Text style={styles.name}>{data.card.title}</Text>
               <Text style={styles.muted}>{data.card.sub ? `${data.card.sub} · ` : ''}{cardSub({ ...data.card, sub: '' }, T)}</Text>
-              <Pressable style={styles.button} onPress={() => void wave.start(shelf.seed(data.card, data.tracks))}>
-                <Text style={styles.buttonText}>Слушать</Text>
-              </Pressable>
+              <Button label="Слушать" icon="play" onPress={() => void wave.start(shelf.seed(data.card, data.tracks))} />
             </View>
           ) : null
         }
@@ -51,9 +50,7 @@ export default function MixScreen() {
   const params = useLocalSearchParams<{ key: string }>();
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-        <Text style={styles.link}>Назад</Text>
-      </Pressable>
+      <ScreenHeader title="" />
       <RequireAuth>
         <Mix cardKey={String(params.key)} />
       </RequireAuth>
@@ -63,12 +60,8 @@ export default function MixScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  back: { paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-start' },
-  link: { color: theme.accent, fontSize: 15 },
-  head: { alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 12 },
-  name: { color: theme.text, fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  head: { alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 14 },
+  name: { color: theme.text, fontSize: 26, fontWeight: '800', textAlign: 'center' },
   muted: { color: theme.muted, fontSize: 13, textAlign: 'center' },
   pad: { padding: 24 },
-  button: { backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 10, paddingHorizontal: 32, marginTop: 4 },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 });

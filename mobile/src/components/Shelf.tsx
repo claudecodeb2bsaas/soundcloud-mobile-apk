@@ -3,6 +3,7 @@ import type { WaveTrack } from '../core/waveTypes';
 import { artwork } from '../player/format';
 import { player } from '../player/instance';
 import { theme } from '../theme';
+import { Icon } from '../ui/Icon';
 import { openTrackMenu } from './TrackMenu';
 
 /** Горизонтальная полка карточек; нажатие запускает очередь с этого трека */
@@ -19,10 +20,12 @@ export function Shelf({ title, tracks, playing }: { title: string; tracks: WaveT
         contentContainerStyle={styles.list}
         renderItem={({ item, index }) => {
           const cover = artwork(item.artwork_url, 't500x500');
+          const now = item.id === playing;
           return (
             <Pressable style={styles.card} onPress={() => player.playTracks(tracks, index)} onLongPress={() => openTrackMenu(item)}>
-              {cover ? <Image source={{ uri: cover }} style={styles.cover} /> : <View style={styles.cover} />}
-              <Text style={[styles.title, item.id === playing && styles.accent]} numberOfLines={1}>{item.title}</Text>
+              {cover ? <Image source={{ uri: cover }} style={styles.cover} /> : <View style={[styles.cover, styles.noCover]}><Icon name="music" size={36} color={theme.muted} /></View>}
+              {now ? <View style={styles.badge}><Icon name="wave" size={16} color="#fff" /></View> : null}
+              <Text style={[styles.title, now && styles.accent]} numberOfLines={1}>{item.title}</Text>
               <Text style={styles.muted} numberOfLines={1}>{item.user?.username ?? ''}</Text>
             </Pressable>
           );
@@ -33,12 +36,14 @@ export function Shelf({ title, tracks, playing }: { title: string; tracks: WaveT
 }
 
 const styles = StyleSheet.create({
-  root: { marginBottom: 20 },
-  heading: { color: theme.text, fontSize: 18, fontWeight: '700', paddingHorizontal: 16, marginBottom: 10 },
-  list: { paddingHorizontal: 16, gap: 12 },
-  card: { width: 140, gap: 2 },
-  cover: { width: 140, height: 140, borderRadius: 6, backgroundColor: theme.surface, marginBottom: 6 },
-  title: { color: theme.text, fontSize: 14, fontWeight: '500' },
+  root: { marginBottom: 26 },
+  heading: { color: theme.text, fontSize: 20, fontWeight: '800', paddingHorizontal: 16, marginBottom: 12 },
+  list: { paddingHorizontal: 16, gap: 14 },
+  card: { width: 148, gap: 2 },
+  cover: { width: 148, height: 148, borderRadius: 18, backgroundColor: theme.surface, marginBottom: 8 },
+  noCover: { alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' },
+  title: { color: theme.text, fontSize: 14, fontWeight: '600' },
   muted: { color: theme.muted, fontSize: 12 },
   accent: { color: theme.accent },
 });

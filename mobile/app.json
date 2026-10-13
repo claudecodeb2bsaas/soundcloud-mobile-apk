@@ -8,6 +8,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#121212",
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#ff5500"
+    },
     "android": {
       "package": "io.github.claudecodeb2bsaas.soundcloudwave",
       "versionCode": 2,
@@ -34,7 +38,14 @@
         }
       ],
       "expo-sqlite",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ff5500",
+          "defaultChannel": "radar"
+        }
+      ],
       "./plugins/withReleaseSigning",
       "expo-background-task",
       "expo-asset",

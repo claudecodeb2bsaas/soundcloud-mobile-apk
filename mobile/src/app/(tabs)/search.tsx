@@ -9,6 +9,8 @@ import { artwork, count } from '../../player/format';
 import { player, usePlayerState } from '../../player/instance';
 import { currentItem } from '../../player/queue';
 import { theme } from '../../theme';
+import { Icon } from '../../ui/Icon';
+import { Chip } from '../../ui/kit';
 import { useLoad } from '../../ui/useLoad';
 
 export default function Search() {
@@ -27,6 +29,9 @@ export default function Search() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      <Text style={styles.title}>Поиск</Text>
+      <View style={styles.field}>
+      <Icon name="search" size={22} color={theme.muted} />
       <TextInput
         style={styles.input}
         value={text}
@@ -38,11 +43,10 @@ export default function Search() {
         autoCorrect={false}
         clearButtonMode="while-editing"
       />
+      </View>
       <View style={styles.tabs}>
         {(['tracks', 'users'] as const).map((id) => (
-          <Pressable key={id} onPress={() => setTab(id)} style={[styles.tab, tab === id && styles.tabOn]}>
-            <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>{id === 'tracks' ? 'Треки' : 'Артисты'}</Text>
-          </Pressable>
+          <Chip key={id} label={id === 'tracks' ? 'Треки' : 'Артисты'} on={tab === id} onPress={() => setTab(id)} />
         ))}
       </View>
       {!query ? (
@@ -69,7 +73,7 @@ export default function Search() {
                 const avatar = artwork(item.avatarUrl);
                 return (
                   <Pressable style={styles.user} onPress={() => router.push(`/artist/${item.id}`)}>
-                    {avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <View style={styles.avatar} />}
+                    {avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <View style={[styles.avatar, styles.noAvatar]}><Icon name="person" size={26} color={theme.muted} /></View>}
                     <View style={styles.meta}>
                       <Text style={styles.name} numberOfLines={1}>{item.username}</Text>
                       <Text style={styles.sub} numberOfLines={1}>{count(item.followers)} подписчиков</Text>
@@ -87,16 +91,15 @@ export default function Search() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  input: { backgroundColor: theme.surface, color: theme.text, borderRadius: 8, margin: 16, marginBottom: 8, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16 },
+  title: { color: theme.text, fontSize: 28, fontWeight: '800', paddingHorizontal: 16, paddingTop: 10 },
+  field: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 26, margin: 16, marginBottom: 12, paddingHorizontal: 18 },
+  input: { flex: 1, color: theme.text, paddingVertical: 12, fontSize: 16 },
   tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  tab: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: 16, backgroundColor: theme.surface },
-  tabOn: { backgroundColor: theme.accent },
-  tabText: { color: theme.muted, fontSize: 14 },
-  tabTextOn: { color: '#fff', fontWeight: '600' },
   muted: { color: theme.muted, fontSize: 13, textAlign: 'center', padding: 24 },
   user: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 12 },
-  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.surface },
+  avatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: theme.surface },
+  noAvatar: { alignItems: 'center', justifyContent: 'center' },
   meta: { flex: 1, gap: 2 },
-  name: { color: theme.text, fontSize: 15, fontWeight: '500' },
+  name: { color: theme.text, fontSize: 15, fontWeight: '600' },
   sub: { color: theme.muted, fontSize: 13 },
 });

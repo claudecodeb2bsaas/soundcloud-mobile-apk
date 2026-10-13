@@ -28,6 +28,7 @@ describe('подпись релизного APK', () => {
     expect(out).toContain("signingConfig System.getenv('ANDROID_KEYSTORE_PATH') ? signingConfigs.release : signingConfigs.debug");
     expect(out.match(/signingConfig signingConfigs\.debug/g)).toHaveLength(1);
     expect(out).toMatch(/signingConfigs \{\s*release \{[\s\S]*ANDROID_KEY_ALIAS[\s\S]*\}\s*debug \{/);
+    expect(out).toContain('SoundCloud-Wave.apk');
   });
 
   it('повторный запуск ничего не меняет, чужой шаблон даёт понятную ошибку', () => {

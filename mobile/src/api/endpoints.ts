@@ -13,6 +13,7 @@ const table = {
     trackBatch: () => '/tracks',
     // PUT ставит лайк, DELETE снимает; путь как у лайков в вебе, на аккаунте не проверялся
     trackLike: (p: PathParams) => `/users/${seg(p, 'user_id')}/track_likes/${seg(p, 'track_id')}`,
+    meTrackLike: (p: PathParams) => `/me/track_likes/${seg(p, 'track_id')}`,
     relatedSounds: (p: PathParams) => `/tracks/${seg(p, 'track_id')}/related`,
     searchCategory: (p: PathParams) => `/search/${seg(p, 'category')}`,
     resolve: () => '/resolve',

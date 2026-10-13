@@ -5,6 +5,10 @@
 export const DESKTOP_USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
+/** Chrome на телефоне без «wv»: страница входа выглядит как мобильная, Google не режет WebView */
+export const MOBILE_USER_AGENT =
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
+
 const CLIENT_ID = /"hydratable"\s*:\s*"apiClient"\s*,\s*"data"\s*:\s*\{[^}]*?"id"\s*:\s*"([A-Za-z0-9]{16,64})"/;
 
 export function parseClientId(html: string): string | null {

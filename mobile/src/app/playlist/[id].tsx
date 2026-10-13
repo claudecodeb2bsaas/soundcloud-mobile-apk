@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../../auth/instance';
@@ -7,6 +7,7 @@ import { TrackRow } from '../../components/TrackRow';
 import { player, usePlayerState } from '../../player/instance';
 import { currentItem } from '../../player/queue';
 import { theme } from '../../theme';
+import { Button, ScreenHeader } from '../../ui/kit';
 import { saveArtwork } from '../../ui/saveArtwork';
 import { useLoad } from '../../ui/useLoad';
 
@@ -23,9 +24,7 @@ export default function Playlist() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-        <Text style={styles.link}>Назад</Text>
-      </Pressable>
+      <ScreenHeader title="" />
       <Loadable ready={!!data} error={error} onRetry={reload}>
         <FlatList
           data={data?.tracks ?? []}
@@ -36,9 +35,7 @@ export default function Playlist() {
                 <Text style={styles.name}>{data.info.title}</Text>
                 <Text style={styles.muted}>{[data.info.owner, `${data.info.count} треков`].filter(Boolean).join(' · ')}</Text>
                 {data.tracks.length ? (
-                  <Pressable style={styles.button} onPress={() => player.playTracks(data.tracks)}>
-                    <Text style={styles.buttonText}>Играть</Text>
-                  </Pressable>
+                  <Button label="Играть" icon="play" onPress={() => player.playTracks(data.tracks)} />
                 ) : null}
                 {data.info.artwork ? (
                   <Pressable onPress={() => void saveArtwork(data.info.artwork)} hitSlop={8}>
@@ -58,12 +55,9 @@ export default function Playlist() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  back: { paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-start' },
-  link: { color: theme.accent, fontSize: 15 },
-  head: { alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 12 },
-  name: { color: theme.text, fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  link: { color: theme.accent, fontSize: 14, fontWeight: '600' },
+  head: { alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 14 },
+  name: { color: theme.text, fontSize: 26, fontWeight: '800', textAlign: 'center' },
   muted: { color: theme.muted, fontSize: 13, textAlign: 'center' },
   pad: { padding: 24 },
-  button: { backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 10, paddingHorizontal: 32, marginTop: 4 },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 });

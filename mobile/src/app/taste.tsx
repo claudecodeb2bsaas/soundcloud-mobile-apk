@@ -1,9 +1,9 @@
-import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../auth/instance';
 import { Loadable, RequireAuth } from '../components/Loadable';
 import { theme } from '../theme';
+import { ScreenHeader } from '../ui/kit';
 import { useLoad } from '../ui/useLoad';
 import { taste } from '../wave/instance';
 
@@ -64,10 +64,7 @@ function Taste() {
 export default function TasteScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-        <Text style={styles.link}>Назад</Text>
-      </Pressable>
-      <Text style={styles.title}>Мой вкус</Text>
+      <ScreenHeader title="Мой вкус" />
       <RequireAuth>
         <Taste />
       </RequireAuth>
@@ -77,19 +74,16 @@ export default function TasteScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  back: { paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-start' },
-  link: { color: theme.accent, fontSize: 15 },
-  title: { color: theme.text, fontSize: 22, fontWeight: '700', paddingHorizontal: 16, paddingBottom: 8 },
   content: { paddingBottom: 24 },
-  heading: { color: theme.text, fontSize: 18, fontWeight: '700', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4 },
+  heading: { color: theme.text, fontSize: 20, fontWeight: '800', paddingHorizontal: 16, paddingTop: 22, paddingBottom: 6 },
   muted: { color: theme.muted, fontSize: 13 },
   pad: { paddingHorizontal: 16, paddingVertical: 8 },
   removed: { paddingHorizontal: 16, paddingTop: 4, gap: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { backgroundColor: theme.surface, borderRadius: 16, paddingVertical: 6, paddingHorizontal: 12 },
+  chip: { backgroundColor: theme.surface, borderRadius: 18, paddingVertical: 8, paddingHorizontal: 14 },
   chipText: { color: theme.text, fontSize: 13 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 6, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, backgroundColor: theme.surface },
   rank: { color: theme.muted, width: 24, fontSize: 13 },
   name: { flex: 1, color: theme.text, fontSize: 15 },
-  drop: { color: theme.accent, fontSize: 13 },
+  drop: { color: theme.accent, fontSize: 13, fontWeight: '700' },
 });

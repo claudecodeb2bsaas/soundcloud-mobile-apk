@@ -85,6 +85,19 @@ describe('лайки и жанры', () => {
     expect(methods).toEqual(['trackLike {"user_id":7,"track_id":42} PUT', 'trackLike {"user_id":7,"track_id":42} DELETE']);
   });
 
+  it('setLike при 401 пробует /me/track_likes', async () => {
+    const methods: string[] = [];
+    const api = {
+      call: async (name: string, path: object, _query: object, options?: { method?: string }) => {
+        methods.push(`${name} ${options?.method}`);
+        if (name === 'trackLike') throw Object.assign(new Error('401'), { status: 401 });
+        return { status: 200, body: null };
+      },
+    } as unknown as ApiClient;
+    await createSoundCloud(api).setLike(7, 42, true);
+    expect(methods).toEqual(['trackLike PUT', 'meTrackLike PUT']);
+  });
+
   it('genrePage берёт свою точку и продолжает по next', async () => {
     const { api, calls } = fakeApi(() => ({ collection: [{ id: 1, kind: 'track' }], next_href: 'https://api-v2.soundcloud.com/x?offset=9&limit=50&client_id=K' }));
     const sc = createSoundCloud(api);

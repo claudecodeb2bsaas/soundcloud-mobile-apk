@@ -1,5 +1,5 @@
 diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
-index 196a5d5..306254e 100644
+index 196a5d5..a1c0e11 100644
 --- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 +++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 @@ -90,6 +90,10 @@ class AudioControlsService : MediaSessionService() {
@@ -13,7 +13,30 @@ index 196a5d5..306254e 100644
        }
      }
  
-@@ -192,17 +196,24 @@ class AudioControlsService : MediaSessionService() {
+@@ -174,10 +178,16 @@ class AudioControlsService : MediaSessionService() {
+     )
+   }
+ 
++  private fun smallIcon(): Int {
++    val id = resources.getIdentifier("notification_icon", "drawable", packageName)
++    return if (id != 0) id else androidx.media3.session.R.drawable.media3_icon_circular_play
++  }
++
+   private fun buildNotification(): Notification? {
+     val session = mediaSession ?: return null
+ 
+     val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+-        .setSmallIcon(androidx.media3.session.R.drawable.media3_icon_circular_play)
++        .setSmallIcon(smallIcon())
+         // If the title is null or empty string android sets the notification to " is running..." we want to keep the notification empty so we \u200E to keep the text empty.
+         .setContentTitle(currentMetadata?.title ?: "\u200E")
+         .setContentText(currentMetadata?.artist)
+@@ -188,48 +198,53 @@ class AudioControlsService : MediaSessionService() {
+ 
+     val style = MediaStyleNotificationHelper.MediaStyle(session)
+ 
+-    // Older Android system UI expects explicit notification actions for transport controls.
+-    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
        val compactViewIndices = mutableListOf<Int>()
        var currentIndex = 0
  
@@ -24,16 +47,17 @@ index 196a5d5..306254e 100644
 -            "Seek Backward",
 -            buildActionPendingIntent(ACTION_SEEK_BACKWARD)
 -          )
-+      // soundcloud-wave: dislike, previous, play/pause, next, like
+-        )
+-        compactViewIndices.add(currentIndex)
+-        currentIndex++
+-      }
++      // soundcloud-wave: dislike, previous, play/pause, next, like — на всех версиях Android
 +      builder.addAction(
 +        NotificationCompat.Action(
 +          androidx.media3.session.R.drawable.media3_icon_thumb_down_unfilled,
 +          "Dislike",
 +          buildActionPendingIntent(ACTION_DISLIKE)
-         )
--        compactViewIndices.add(currentIndex)
--        currentIndex++
--      }
++        )
 +      )
 +      currentIndex++
 +      builder.addAction(
@@ -48,7 +72,15 @@ index 196a5d5..306254e 100644
  
        builder.addAction(
          NotificationCompat.Action(
-@@ -218,16 +229,21 @@ class AudioControlsService : MediaSessionService() {
+           if (session.player.isPlaying) {
+             androidx.media3.session.R.drawable.media3_icon_pause
+           } else {
+             androidx.media3.session.R.drawable.media3_icon_play
+           },
+           if (session.player.isPlaying) "Pause" else "Play",
+           buildActionPendingIntent(if (session.player.isPlaying) ACTION_PAUSE else ACTION_PLAY)
+         )
+       )
        compactViewIndices.add(currentIndex)
        currentIndex++
  
@@ -59,14 +91,15 @@ index 196a5d5..306254e 100644
 -            "Seek Forward",
 -            buildActionPendingIntent(ACTION_SEEK_FORWARD)
 -          )
+-        )
+-        compactViewIndices.add(currentIndex)
+-      }
 +      builder.addAction(
 +        NotificationCompat.Action(
 +          androidx.media3.session.R.drawable.media3_icon_next,
 +          "Next",
 +          buildActionPendingIntent(ACTION_NEXT)
-         )
--        compactViewIndices.add(currentIndex)
--      }
++        )
 +      )
 +      compactViewIndices.add(currentIndex)
 +      builder.addAction(
@@ -78,8 +111,11 @@ index 196a5d5..306254e 100644
 +      )
  
        style.setShowActionsInCompactView(*compactViewIndices.toIntArray())
-     }
-@@ -240,19 +256,23 @@ class AudioControlsService : MediaSessionService() {
+-    }
+ 
+     builder.setStyle(style)
+     return builder.build()
+@@ -240,19 +255,23 @@ class AudioControlsService : MediaSessionService() {
      val session = mediaSession ?: return
      val mediaButtons = mutableListOf<CommandButton>()
  
@@ -116,7 +152,7 @@ index 196a5d5..306254e 100644
      mediaButtons.add(
        CommandButton.Builder(if (isPlaying) CommandButton.ICON_PAUSE else CommandButton.ICON_PLAY)
          .setDisplayName(if (isPlaying) "Pause" else "Play")
-@@ -261,19 +281,22 @@ class AudioControlsService : MediaSessionService() {
+@@ -261,19 +280,22 @@ class AudioControlsService : MediaSessionService() {
          .setSlots(CommandButton.SLOT_CENTRAL)
          .build()
      )
@@ -152,7 +188,7 @@ index 196a5d5..306254e 100644
      session.setCustomLayout(mediaButtons)
      session.setMediaButtonPreferences(mediaButtons)
    }
-@@ -352,6 +375,7 @@ class AudioControlsService : MediaSessionService() {
+@@ -352,6 +374,7 @@ class AudioControlsService : MediaSessionService() {
      currentPlayer = player
      currentMetadata = metadata
      currentOptions = options
@@ -160,7 +196,7 @@ index 196a5d5..306254e 100644
  
      metadata?.artworkUrl?.let {
        loadArtworkFromUrl(it) { bitmap ->
-@@ -414,6 +438,7 @@ class AudioControlsService : MediaSessionService() {
+@@ -414,6 +437,7 @@ class AudioControlsService : MediaSessionService() {
      currentPlayer?.isActiveForLockScreen = false
      removePlayerListener()
      currentPlayer = null
@@ -168,7 +204,7 @@ index 196a5d5..306254e 100644
      currentMetadata = null
      mediaSession?.release()
      mediaSession = null
-@@ -559,6 +584,14 @@ class AudioControlsService : MediaSessionService() {
+@@ -559,6 +583,14 @@ class AudioControlsService : MediaSessionService() {
      const val ACTION_SEEK_FORWARD = "expo.modules.audio.action.SEEK_FORWARD"
      const val ACTION_SEEK_BACKWARD = "expo.modules.audio.action.SEEK_BACKWARD"
  

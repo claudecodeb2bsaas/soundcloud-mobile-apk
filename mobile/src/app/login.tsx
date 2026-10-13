@@ -2,8 +2,8 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { DESKTOP_USER_AGENT } from '../api/clientId';
+import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
+import { MOBILE_USER_AGENT } from '../api/clientId';
 import { LOGIN_SCRIPT } from '../auth/loginScript';
 import { auth } from '../auth/instance';
 import { cleanToken, parseLoginMessage } from '../auth/session';
@@ -11,16 +11,26 @@ import { theme } from '../theme';
 
 const SIGN_IN_URL = 'https://soundcloud.com/signin';
 
-function isSoundCloud(url: string): boolean {
+function hostOf(url: string): string {
   try {
-    const { protocol, hostname } = new URL(url);
-    return protocol === 'https:' && (hostname === 'soundcloud.com' || hostname.endsWith('.soundcloud.com'));
+    return new URL(url).hostname;
   } catch {
-    return false;
+    return '';
   }
 }
 
+function isHttps(url: string): boolean {
+  return url.startsWith('https://') || url.startsWith('about:');
+}
+
+function isSoundCloud(url: string): boolean {
+  const host = hostOf(url);
+  return host === 'soundcloud.com' || host === 'm.soundcloud.com' || host.endsWith('.soundcloud.com');
+}
+
 export default function Login() {
+  const web = useRef<WebView>(null);
+  const [url, setUrl] = useState(SIGN_IN_URL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [manual, setManual] = useState(false);
@@ -43,7 +53,6 @@ export default function Login() {
   }
 
   function onMessage(event: WebViewMessageEvent) {
-    // Токен принимаем только от страниц самого SoundCloud
     if (!isSoundCloud(event.nativeEvent.url)) return;
     const message = parseLoginMessage(event.nativeEvent.data);
     if (message) void finish(message.token, message.clientId);
@@ -73,7 +82,7 @@ export default function Login() {
       {manual ? (
         <View style={styles.manual}>
           <Text style={styles.hint}>
-            Вставь OAuth-токен аккаунта. Он нужен, если вход через страницу не сработал, например при входе через Google.
+            Вставь OAuth-токен аккаунта. Он нужен, если вход через страницу не сработал.
           </Text>
           <TextInput
             style={styles.input}
@@ -91,15 +100,28 @@ export default function Login() {
         </View>
       ) : (
         <WebView
+          ref={web}
           style={styles.web}
-          source={{ uri: SIGN_IN_URL }}
-          userAgent={DESKTOP_USER_AGENT}
-          incognito
+          source={{ uri: url }}
+          userAgent={MOBILE_USER_AGENT}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
+          javaScriptEnabled
+          domStorageEnabled
+          javaScriptCanOpenWindowsAutomatically
+          setSupportMultipleWindows
+          injectedJavaScript={LOGIN_SCRIPT}
           injectedJavaScriptBeforeContentLoaded={LOGIN_SCRIPT}
           onMessage={onMessage}
-          originWhitelist={['https://*']}
-          onShouldStartLoadWithRequest={(request) => request.url.startsWith('https://')}
-          setSupportMultipleWindows={false}
+          originWhitelist={['https://*', 'about:*']}
+          onShouldStartLoadWithRequest={(request) => isHttps(request.url)}
+          onNavigationStateChange={(nav: WebViewNavigation) => {
+            if (nav.url && nav.url !== url && isHttps(nav.url)) setUrl(nav.url);
+          }}
+          onOpenWindow={(event) => {
+            const next = event.nativeEvent.targetUrl;
+            if (next && isHttps(next)) setUrl(next);
+          }}
         />
       )}
       {busy ? (
@@ -120,8 +142,8 @@ const styles = StyleSheet.create({
   web: { flex: 1, backgroundColor: theme.bg },
   manual: { padding: 16, gap: 12 },
   hint: { color: theme.muted, fontSize: 13, lineHeight: 18 },
-  input: { backgroundColor: theme.surface, color: theme.text, borderRadius: 8, padding: 12, fontSize: 15 },
-  button: { backgroundColor: theme.accent, borderRadius: 8, padding: 14, alignItems: 'center' },
+  input: { backgroundColor: theme.surface, color: theme.text, borderRadius: 16, padding: 12, fontSize: 15 },
+  button: { backgroundColor: theme.accent, borderRadius: 22, padding: 14, alignItems: 'center' },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000a', alignItems: 'center', justifyContent: 'center' },
 });
