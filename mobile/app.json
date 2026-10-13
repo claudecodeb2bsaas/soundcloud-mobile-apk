@@ -3,7 +3,7 @@
     "name": "SoundCloud Wave",
     "slug": "soundcloud-wave",
     "scheme": "scwave",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "io.github.claudecodeb2bsaas.soundcloudwave",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#121212",
         "foregroundImage": "./assets/adaptive-icon.png"
